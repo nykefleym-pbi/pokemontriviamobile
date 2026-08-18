@@ -347,6 +347,56 @@ The web app's tokens are `oklch`, which React Native cannot parse. They were
 converted to sRGB hex and live in `tailwind.config.js` — `#ee343b` poké-red,
 `#f9c718` yellow, `#0076d2` blue, `#0f1b2d` dark.
 
+## Who's That Pokémon
+
+**Six modes, not two** — the ROADMAP's "both modes" understates it:
+
+| Mode | Shows | Answer |
+| --- | --- | --- |
+| `1A` | silhouette | type the name |
+| `1B` | silhouette | pick the types |
+| `2` | extreme crop of the sprite | type the name |
+| `3` | plays the cry | multiple choice |
+| `4` | a typing | name ANY species with it |
+| `5` | Pokédex entry, species name masked | type the name |
+
+`1A`, `1B`, `2` and `4` are built. `3` needs cry audio and `5` needs a
+flavour-text endpoint; neither is fetched yet, so `makeSupportedRound` re-rolls
+a round that lands on them. That is a **filter, not a fork** — `makeRound` from
+`packages/core` still generates every round, so there is one definition of what
+a round is. Delete an entry from `SUPPORTED` when its mode is implemented;
+do not reimplement round generation.
+
+### `makeRound` is the fourth impurity exception, and it is different in kind
+
+The other three (`rollAbilityId`, `shuffleTriviaOptionsWithOrder`,
+`pickRandomGymLeader`) are present but **uncalled**. `makeRound` is **called,
+and has to be** — generating the round is the module's job, and it makes eight
+ambient random choices doing it.
+
+That is deliberate, because of what the determinism rule is *for*: a battle must
+be replayable from `(seed, action log)` so a server can check it. A Who's That
+round is generated once and graded immediately — nothing replays it. The web app
+keeps this module in `lib` precisely so its route and its Edge Function share one
+implementation; splitting it to satisfy a lint rule would reintroduce the
+duplication the architecture exists to avoid.
+
+**If Who's That ever becomes server-authoritative with replay, `makeRound` needs
+an `Rng` parameter** and the exception must go.
+
+### The core is now 124 files
+
+Porting this pulled in the 42-file item catalog (`content/items`), the slim
+roster and `legendary-data` — 79 → 124. The item catalog is needed for Phase 5
+item 4 (shop/items) regardless, so it is not carried for one screen. Still zero
+bare imports, still all byte-identical.
+
+Note `whos-that.ts` deliberately imports `pokemon-data.slim.generated`, not
+`pokemon-data` — its own comment explains why: it is the one lib module the
+whos-that Edge Function bundles, and pulling the full ~195 KB roster in just to
+read id/name/types would make it the largest function in the codebase. Do not
+"tidy" that import.
+
 ## Gyms and the Elite Four
 
 43 gym leaders across 5 regions and 21 Elite Four challengers, both driving the

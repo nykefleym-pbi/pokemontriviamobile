@@ -385,9 +385,12 @@ In dependency order, each ending in a new internal-testing build:
    Elite Four challengers gated on level, badges tracked, and both wired into
    the battle screen by explicit id. Trophies are not built. Badge and trainer
    art is not bundled — see below.
-3. **Who's That Pokémon** — both modes, including the silhouette sizing lesson
-   already learned (size the sprite as a share of its panel, never fixed inside an
-   `overflow-hidden` box).
+3. **Who's That Pokémon** — ✅ **partly done**. There are SIX modes, not two:
+   `1A` silhouette→name, `1B` silhouette→types, `2` extreme crop→name,
+   `3` cry→multiple choice, `4` typing→name any match, `5` masked Pokédex
+   entry→name. Four are built; `3` needs cry audio and `5` needs a
+   flavour-text endpoint, neither of which the app fetches yet, so a round
+   landing on either is re-rolled. The silhouette follows the sizing rule.
 4. **Shop, items, daily gift, achievements, level rewards.**
 5. **Mega raids** — needs `mega_*` tables and the `mega-run` / `mega-reward-claim`
    Edge Functions ported.

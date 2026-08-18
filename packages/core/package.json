@@ -12,7 +12,9 @@
     "./trivia": "./src/lib/trivia-core.ts",
     "./level-curve": "./src/lib/level-curve.ts",
     "./gym-leaders": "./src/lib/gym-leaders.ts",
-    "./elite-four": "./src/lib/elite-four.ts"
+    "./elite-four": "./src/lib/elite-four.ts",
+    "./whos-that": "./src/lib/whos-that.ts",
+    "./items": "./src/content/items/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
