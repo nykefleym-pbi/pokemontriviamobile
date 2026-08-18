@@ -30,3 +30,10 @@ jobs:
 
       - name: Test
         run: npm test
+
+      # The only gate that catches Metro monorepo breakage. tsc and eslint both
+      # resolve `@ptb/core` through node_modules and stay happy even when Metro
+      # cannot find it at bundle time -- a failure that would otherwise surface
+      # as a red screen on a phone rather than in CI.
+      - name: Bundle (Metro)
+        run: npm run bundle --workspace @ptb/mobile
