@@ -24,6 +24,7 @@ export function buildCfg(
   partner: PokeEntry,
   opponent: PokeEntry,
   level = 5,
+  mode: SoloBattleCfg["mode"] = "battle",
 ): SoloBattleCfg {
   return {
     questions,
@@ -31,7 +32,7 @@ export function buildCfg(
     playerTypes: [...partner.types],
     abilityId: null,
     level,
-    mode: "battle",
+    mode,
     enemyPokemonId: opponent.id,
     enemyTypes: [...opponent.types],
     trainingPoints: 0,

@@ -34,6 +34,8 @@ export default function RootLayout() {
         <Stack.Screen name="create" options={{ title: "New Trainer" }} />
         <Stack.Screen name="partner" options={{ title: "Your Partner" }} />
         <Stack.Screen name="battle" options={{ title: "Solo Battle" }} />
+        <Stack.Screen name="gyms" options={{ title: "Gym Leaders" }} />
+        <Stack.Screen name="elite" options={{ title: "Elite Four" }} />
         <Stack.Screen name="dex/index" options={{ title: "Pokédex" }} />
         <Stack.Screen name="dex/[id]" options={{ title: "Entry" }} />
       </Stack>
