@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { applyAnswer, applyRoundStart, type BattleEvent, type BattleState } from "@ptb/core";
-import { buildCfg, startBattle, type BattleRuntime } from "../lib/battle-setup";
+import { findPokemon, spriteUrl, type PokeEntry } from "@ptb/core/pokemon-data";
+import {
+  buildCfg,
+  DEFAULT_PARTNER_ID,
+  pickOpponent,
+  startBattle,
+  type BattleRuntime,
+} from "../lib/battle-setup";
 import { gradeAnswer, loadQuestions, type QuestionSet } from "../lib/questions";
 import { FALLBACK_QUESTIONS } from "../lib/questions";
+import { useTrainer } from "../lib/store";
 
 const QUESTION_COUNT = 6;
 
@@ -58,7 +66,10 @@ export default function Battle() {
   const [log, setLog] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [reveal, setReveal] = useState<{ choice: number; correctIndex: number } | null>(null);
+  const [sides, setSides] = useState<{ partner: PokeEntry; opponent: PokeEntry } | null>(null);
   const askedAt = useRef(Date.now());
+
+  const partnerId = useTrainer((s) => s.partnerId);
 
   useEffect(() => {
     let alive = true;
@@ -69,15 +80,18 @@ export default function Battle() {
       // bundled shapes purely for length — correctness arrives per answer from
       // `gradeAnswer` and is fed straight into applyAnswer.
       const shapes = qs.local ?? FALLBACK_QUESTIONS.slice(0, qs.served.length);
+      const partner = findPokemon(partnerId ?? DEFAULT_PARTNER_ID) ?? findPokemon(DEFAULT_PARTNER_ID)!;
+      const opponent = pickOpponent(partner);
       if (!alive) return;
+      setSides({ partner, opponent });
       setSet(qs);
-      setRuntime(startBattle(buildCfg(shapes)));
+      setRuntime(startBattle(buildCfg(shapes, partner, opponent)));
       askedAt.current = Date.now();
     });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [partnerId]);
 
   const state: BattleState | null = runtime?.state ?? null;
   const question = set?.served[idx] ?? null;
@@ -145,9 +159,35 @@ export default function Battle() {
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-5 p-5">
       <View className="flex-row gap-4">
-        <HpBar label="You" hp={state.playerHp} max={runtime.config.playerMaxHp} tone="bg-poke-blue" />
-        <HpBar label="Enemy" hp={state.enemyHp} max={runtime.config.enemyMaxHp} tone="bg-poke-red" />
+        <HpBar
+          label={sides?.partner.name ?? "You"}
+          hp={state.playerHp}
+          max={runtime.config.playerMaxHp}
+          tone="bg-poke-blue"
+        />
+        <HpBar
+          label={sides?.opponent.name ?? "Enemy"}
+          hp={state.enemyHp}
+          max={runtime.config.enemyMaxHp}
+          tone="bg-poke-red"
+        />
       </View>
+
+      {sides && (
+        <View className="flex-row items-center justify-between px-2">
+          <Image
+            source={{ uri: spriteUrl(sides.partner.id) }}
+            style={{ width: 88, height: 88 }}
+            resizeMode="contain"
+          />
+          <Text className="text-xs font-bold text-muted-foreground">VS</Text>
+          <Image
+            source={{ uri: spriteUrl(sides.opponent.id) }}
+            style={{ width: 88, height: 88 }}
+            resizeMode="contain"
+          />
+        </View>
+      )}
 
       <View className="flex-row justify-between rounded-card bg-card p-3">
         <Text className="text-xs text-muted-foreground">Streak {state.streak}</Text>

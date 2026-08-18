@@ -263,15 +263,22 @@ Gate: a debug APK installs and a full solo battle completes on a real device.
 
 > **Status: partially built.** Done — the Expo Router app (SDK 57 / RN 0.86),
 > `@ptb/core` wired through a monorepo Metro config, NativeWind with the web
-> app's tokens converted from oklch to hex, a home screen, a solo battle screen
-> driving the real engine, and a result summary. CI gained a fourth gate,
+> app's tokens converted from oklch to hex, trainer creation, partner pick, a
+> home screen showing both, a solo battle screen driving the real engine against
+> the chosen partner, a result summary, and local persistence via Zustand +
+> MMKV. CI gained a fourth gate,
 > `npm run bundle`, because Metro resolution failures are invisible to tsc and
 > eslint.
 >
-> Not done — boot splash, trainer creation, partner pick, profile card,
-> MMKV/Zustand save sync, `expo-audio` / `expo-haptics`, and bundling the sprite
-> and chrome art. **The gate below has NOT been met**: there is no Android SDK
-> or emulator in this environment, so nothing has run on a device.
+> Not done — boot splash, save SYNC (the Zustand store is local-only; nothing
+> writes to `saves` yet), `expo-audio` / `expo-haptics`, and bundling the sprite
+> and chrome art (partner sprites currently load from the PokeAPI CDN).
+> **The gate below has NOT been met**: there is no Android SDK or emulator in
+> this environment, so nothing has run on a device.
+>
+> Note MMKV is a Nitro native module, so **Expo Go cannot run this app** — it
+> needs a development build. Swapping to AsyncStorage would restore Expo Go and
+> would touch only `src/lib/store.ts`.
 >
 > The app currently plays the bundled six-question fallback, not the seeded
 > bank: the game RPCs are granted to `authenticated`, and anonymous sign-in is

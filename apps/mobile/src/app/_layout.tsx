@@ -15,6 +15,8 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" options={{ title: "Pokémon Trivia Battle" }} />
+        <Stack.Screen name="create" options={{ title: "New Trainer" }} />
+        <Stack.Screen name="partner" options={{ title: "Your Partner" }} />
         <Stack.Screen name="battle" options={{ title: "Solo Battle" }} />
       </Stack>
     </>
