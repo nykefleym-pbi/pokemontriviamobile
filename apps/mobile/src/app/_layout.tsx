@@ -1,10 +1,23 @@
+import { useEffect } from "react";
 import { Stack } from "expo-router";
-import { useBootSync } from "../lib/use-boot-sync";
 import { StatusBar } from "expo-status-bar";
+import * as SplashScreen from "expo-splash-screen";
+import { useBootSync } from "../lib/use-boot-sync";
+import { useTrainer } from "../lib/store";
 import "../global.css";
+
+// Hold the native splash until the store has read from disk. Without this the
+// first frame is whatever renders before rehydration — a blank screen, or worse
+// the onboarding prompt shown to a player who already has a trainer.
+void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   useBootSync();
+  const hydrated = useTrainer((s) => s.hydrated);
+
+  useEffect(() => {
+    if (hydrated) void SplashScreen.hideAsync();
+  }, [hydrated]);
 
   return (
     <>

@@ -275,8 +275,21 @@ Gate: a debug APK installs and a full solo battle completes on a real device.
 > (fresh-install adoption plus debounced pushes; a true multi-device merge is
 > explicitly not implemented).
 >
-> Not done — boot splash, `expo-audio` / `expo-haptics`, and bundling the sprite
-> and chrome art (partner sprites currently load from the PokeAPI CDN).
+> Also done — the native boot splash held until the store rehydrates,
+> `expo-audio` for the battle loop and win/lose sting, `expo-haptics` for answer
+> feedback, and a persisted music toggle.
+>
+> Not done — bundling the sprite and chrome art. Two different reasons sit
+> behind that bullet: **Pokémon sprites are not local to the web app** (it
+> fetches them from the PokeAPI CDN), and this environment has no outbound
+> network, so they cannot be downloaded here at all. The chrome art *is* local
+> but no screen renders it yet, and the type icons are SVG, needing
+> `react-native-svg` plus a Metro transformer before they are usable.
+>
+> Also not ported: **`playSfx`**. The web app synthesises its sound effects with
+> WebAudio oscillators rather than shipping files, so there is nothing to bundle
+> and expo-audio cannot synthesise. Answer feedback is haptic-only until either
+> recorded assets exist or a synthesis library is added.
 > **The gate below has NOT been met**: there is no Android SDK or emulator in
 > this environment, so nothing has run on a device.
 >

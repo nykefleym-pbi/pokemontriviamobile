@@ -193,8 +193,9 @@ real engine against the chosen partner, a result summary, and save sync to the
 `saves` table. Trainer state persists locally via Zustand + MMKV and is pushed
 to the server. `npm run bundle` produces a 4.3 MB Android bundle.
 
-**What the ROADMAP's Phase 3 lists that is NOT built:** boot splash,
-`expo-audio` / `expo-haptics`, and bundling the sprite and chrome art. The phase's gate — a
+**What the ROADMAP's Phase 3 lists that is NOT built:** bundling the sprite and
+chrome art — see *Assets* below for why part of that is blocked here rather than
+merely undone. The phase's gate — a
 debug APK completing a battle on a real device — has NOT been met; there is no
 Android SDK or emulator in this environment, so nothing here has ever run on a
 device.
@@ -295,6 +296,50 @@ A real multi-device merge — two devices that both have progress — is **not
 implemented**. `saves.version` and `updated_at` exist to support one when a
 phase needs it; today the second device's progress would lose. Anyone adding
 multi-device play has to design that merge rather than assume this handles it.
+
+### Audio, and the half of it that could not be ported
+
+`expo-audio` plays the battle loop and the win/lose sting; `expo-haptics` gives
+answer feedback. Both keep the web app's function names (`playBgm`, `stopBgm`,
+`playBattleResult`, `answerHaptic`) so the two codebases read alike.
+
+**`playSfx` was NOT ported, and this is a decision rather than an oversight.**
+The web app *synthesises* its sound effects with WebAudio oscillators — the only
+files it references are under `/song/`. So there are no SFX assets to bundle,
+and expo-audio cannot synthesise. Answer feedback is haptic-only until either
+recorded assets exist or a synthesis library is added.
+
+Three of the web app's 26 audio files are bundled (3.2 MB of 32 MB) — the solo
+battle's loop, win and lose. Bundling the rest is for whichever phase adds the
+modes that use them. They were renamed to `snake_case`: Android resource names
+cannot contain spaces, and the originals are all `Title Case With Spaces.mp3`.
+
+Assets are imported (`import bgm from "…/battle_bgm.mp3"`), not `require`d, so
+the `no-require-imports` lint rule stays intact. Expo ships no `*.mp3` type
+declaration, so `apps/mobile/assets.d.ts` provides one.
+
+### Assets: what is blocked here, not merely undone
+
+The ROADMAP wants the sprite and chrome art bundled so missing-asset bugs become
+impossible. Two different situations sit behind that one bullet:
+
+- **Pokémon sprites are NOT local to the web app.** It fetches them from the
+  PokeAPI CDN via `spriteUrl`. Bundling them means downloading ~1000 files, and
+  **this environment has no network route out**, so it cannot be done from here.
+  The app therefore still loads partner sprites from the CDN.
+- **Chrome art IS local** (`public/types` 76 KB, `ui` 736 KB, `items` 68 KB,
+  `rewards` 312 KB, `field` 376 KB) and could be copied. It is not, because no
+  screen renders it yet — the type badges use colours, not the icons. The type
+  icons are also **SVG**, which React Native cannot render without adding
+  `react-native-svg` and a Metro transformer. Bundling art nothing draws would
+  be premature.
+
+### The boot splash is the native one
+
+`SplashScreen.preventAutoHideAsync()` holds Expo's native splash until the store
+has rehydrated, then `hideAsync()` releases it. That replaces the blank frame the
+`!hydrated` guard used to render, and closes the window in which a returning
+player could see the onboarding prompt.
 
 ### Colours were converted, not eyeballed
 

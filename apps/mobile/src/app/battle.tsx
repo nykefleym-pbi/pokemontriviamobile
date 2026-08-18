@@ -13,6 +13,8 @@ import {
 import { gradeAnswer, loadQuestions, type QuestionSet } from "../lib/questions";
 import { FALLBACK_QUESTIONS } from "../lib/questions";
 import { useTrainer } from "../lib/store";
+import { playBattleResult, playBgm, setMusicOn, stopBgm } from "../lib/audio";
+import { answerHaptic } from "../lib/haptics";
 
 const QUESTION_COUNT = 6;
 
@@ -70,6 +72,7 @@ export default function Battle() {
   const askedAt = useRef(Date.now());
 
   const partnerId = useTrainer((s) => s.partnerId);
+  const musicOn = useTrainer((s) => s.musicOn);
 
   useEffect(() => {
     let alive = true;
@@ -93,6 +96,14 @@ export default function Battle() {
     };
   }, [partnerId]);
 
+  // BGM follows the screen, not the battle: leaving mid-fight must stop it, or
+  // the loop keeps playing under the home screen.
+  useEffect(() => {
+    setMusicOn(musicOn);
+    if (musicOn) playBgm("battle_regular");
+    return () => stopBgm();
+  }, [musicOn]);
+
   const state: BattleState | null = runtime?.state ?? null;
   const question = set?.served[idx] ?? null;
   const done = state !== null && state.phase !== "in_progress";
@@ -105,6 +116,7 @@ export default function Battle() {
       const elapsedMs = Date.now() - askedAt.current;
       try {
         const grade = await gradeAnswer(set, idx, choice);
+        answerHaptic(grade.correct);
         setReveal({ choice, correctIndex: grade.correctIndex });
 
         // Round start first (statuses tick, poison bites), then the answer —
@@ -120,6 +132,10 @@ export default function Battle() {
                 runtime.rng.fork(String(idx)),
               )
             : { state: rs.state, events: [] };
+
+        if (res.state.phase !== "in_progress") {
+          playBattleResult(res.state.phase === "won");
+        }
 
         const events = [...rs.events, ...res.events];
         const lines = events.map(describe).filter((l): l is string => l !== null);
