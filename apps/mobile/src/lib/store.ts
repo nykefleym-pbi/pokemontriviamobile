@@ -46,6 +46,8 @@ interface TrainerState {
   userId: string | null;
   /** Server-allocated, never invented here — see migration 0001. */
   friendCode: string | null;
+  musicOn: boolean;
+  setMusicOn: (on: boolean) => void;
   setTrainer: (name: string, sprite: TrainerSprite) => void;
   setPartner: (id: number) => void;
   reset: () => void;
@@ -60,8 +62,10 @@ export const useTrainer = create<TrainerState>()(
       hydrated: false,
       userId: null,
       friendCode: null,
+      musicOn: true,
       setTrainer: (trainerName, sprite) => set({ trainerName: trainerName.trim(), sprite }),
       setPartner: (partnerId) => set({ partnerId }),
+      setMusicOn: (musicOn) => set({ musicOn }),
       reset: () => set({ trainerName: null, sprite: "red", partnerId: null }),
     }),
     {
@@ -74,6 +78,7 @@ export const useTrainer = create<TrainerState>()(
         trainerName: s.trainerName,
         sprite: s.sprite,
         partnerId: s.partnerId,
+        musicOn: s.musicOn,
       }),
       // Nothing should render a "create your trainer" prompt before the store
       // has actually read from disk, or a returning player sees onboarding for

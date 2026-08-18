@@ -37,8 +37,14 @@ Built: anonymous sign-in, trainer creation, partner pick, home with the
 server-allocated friend code, a solo battle driven by `@ptb/core`, a result
 summary, local persistence (Zustand + MMKV), and save sync to `saves`.
 
-Not built: boot splash, audio, haptics, sprite bundling. Nothing has run on a
-real device yet. See `docs/ROADMAP.md` Phase 3.
+Also built: native boot splash, battle music and win/lose stings
+(`expo-audio`), answer haptics (`expo-haptics`), and a persisted music toggle.
+
+Not built: bundled sprite/chrome art — Pokémon sprites live on the PokeAPI CDN,
+not in the web repo, and the chrome art is SVG that needs `react-native-svg`.
+Sound *effects* are not ported either: the web app synthesises them with
+WebAudio, so there are no files to bundle. Nothing has run on a real device yet.
+See `docs/ROADMAP.md` Phase 3.
 
 Questions come from the seeded bank of 3,989; a bundled six-question set is the
 offline fallback.

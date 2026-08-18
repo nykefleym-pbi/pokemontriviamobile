@@ -10,6 +10,8 @@ export default function Home() {
   const sprite = useTrainer((s) => s.sprite);
   const partnerId = useTrainer((s) => s.partnerId);
   const friendCode = useTrainer((s) => s.friendCode);
+  const musicOn = useTrainer((s) => s.musicOn);
+  const setMusic = useTrainer((s) => s.setMusicOn);
   const reset = useTrainer((s) => s.reset);
 
   // Rendering onboarding before the store has read from disk would flash a
@@ -96,6 +98,12 @@ export default function Home() {
 
         <Pressable onPress={() => router.push("/partner")} className="px-6 py-2">
           <Text className="text-center text-sm text-muted-foreground">Change partner</Text>
+        </Pressable>
+
+        <Pressable onPress={() => setMusic(!musicOn)} className="px-6 py-2">
+          <Text className="text-center text-sm text-muted-foreground">
+            Music: {musicOn ? "on" : "off"}
+          </Text>
         </Pressable>
 
         <Pressable onPress={reset} className="px-6 py-2">
