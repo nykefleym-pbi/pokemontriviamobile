@@ -1,6 +1,7 @@
 import { Image, Pressable, Text, View } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { findPokemon, spriteUrl } from "@ptb/core/pokemon-data";
+import { countCaught, DEX_TOTAL } from "../lib/dex";
 import { useTrainer } from "../lib/store";
 
 export default function Home() {
@@ -12,6 +13,7 @@ export default function Home() {
   const friendCode = useTrainer((s) => s.friendCode);
   const musicOn = useTrainer((s) => s.musicOn);
   const setMusic = useTrainer((s) => s.setMusicOn);
+  const dex = useTrainer((s) => s.dex);
   const reset = useTrainer((s) => s.reset);
 
   // Rendering onboarding before the store has read from disk would flash a
@@ -93,6 +95,15 @@ export default function Home() {
         >
           <Text className="text-center text-lg font-bold text-primary-foreground">
             {partner ? "Start a solo battle" : "Choose a partner"}
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => router.push("/dex")}
+          className="rounded-card border border-border bg-card px-6 py-3 active:opacity-80"
+        >
+          <Text className="text-center text-base font-bold text-poke-dark">
+            Pokédex · {countCaught(dex)} / {DEX_TOTAL}
           </Text>
         </Pressable>
 

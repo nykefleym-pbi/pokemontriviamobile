@@ -73,6 +73,8 @@ export default function Battle() {
 
   const partnerId = useTrainer((s) => s.partnerId);
   const musicOn = useTrainer((s) => s.musicOn);
+  const markSeen = useTrainer((s) => s.markSeen);
+  const markCaught = useTrainer((s) => s.markCaught);
 
   useEffect(() => {
     let alive = true;
@@ -87,6 +89,9 @@ export default function Battle() {
       const opponent = pickOpponent(partner);
       if (!alive) return;
       setSides({ partner, opponent });
+      // Encountering is seeing. Winning is catching — that is the whole loop.
+      markSeen(opponent.id);
+      markCaught(partner.id);
       setSet(qs);
       setRuntime(startBattle(buildCfg(shapes, partner, opponent)));
       askedAt.current = Date.now();
@@ -94,7 +99,7 @@ export default function Battle() {
     return () => {
       alive = false;
     };
-  }, [partnerId]);
+  }, [partnerId, markSeen, markCaught]);
 
   // BGM follows the screen, not the battle: leaving mid-fight must stop it, or
   // the loop keeps playing under the home screen.
@@ -135,6 +140,7 @@ export default function Battle() {
 
         if (res.state.phase !== "in_progress") {
           playBattleResult(res.state.phase === "won");
+          if (res.state.phase === "won" && sides) markCaught(sides.opponent.id);
         }
 
         const events = [...rs.events, ...res.events];
@@ -153,7 +159,7 @@ export default function Battle() {
         setBusy(false);
       }
     },
-    [set, runtime, busy, done, idx],
+    [set, runtime, busy, done, idx, sides, markCaught],
   );
 
   const summary = useMemo(() => {

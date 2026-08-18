@@ -377,8 +377,10 @@ Gate: the app installs from the Play internal-testing link on the owner's phone.
 
 In dependency order, each ending in a new internal-testing build:
 
-1. **Pokédex + collection** — the dex grid, detail screen, seen/caught states,
-   backdrops. Largely presentational over ported data.
+1. **Pokédex + collection** — ✅ **done**: dex grid with search, detail screen,
+   seen/caught states, caught count on home and mirrored to `profiles`.
+   Backdrops are not built (they need bundled art). Encountering marks *seen*,
+   winning marks *caught* — the loop the rest of the collection hangs off.
 2. **Gym leagues / Elite Four** — `gym-leaders.ts`, `elite-four.ts`, badges, trophies.
 3. **Who's That Pokémon** — both modes, including the silhouette sizing lesson
    already learned (size the sprite as a share of its panel, never fixed inside an
