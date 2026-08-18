@@ -8,7 +8,9 @@
     ".": "./src/engine/index.ts",
     "./type-chart": "./src/lib/type-chart.ts",
     "./pokemon-data": "./src/lib/pokemon-data.ts",
-    "./abilities": "./src/lib/abilities.ts"
+    "./abilities": "./src/lib/abilities.ts",
+    "./trivia": "./src/lib/trivia-core.ts",
+    "./level-curve": "./src/lib/level-curve.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

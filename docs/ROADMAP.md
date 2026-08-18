@@ -8,7 +8,9 @@
 > - **Phase 1 — partially done.** `packages/core` exists and is green, but with a
 >   deliberately narrower scope than this plan specifies. See *Phase 1 boundary*.
 > - **Phase 2 — done.** Seven migrations applied to `dpmnugfbawebozwihmer`.
-> - **Phase 3 — not started.** `apps/mobile` does not exist.
+> - **Phase 3 — scaffolded, not finished.** `apps/mobile` builds, bundles and
+>   plays a solo battle; most of the phase's screens are still missing and the
+>   on-device gate has not been met.
 > - **Repo is `nykefleym-pbi/pokemontriviamobile`** (no hyphen), not the
 >   `pokemontrivia-mobile` suggested below. It exists and this is it.
 
@@ -259,6 +261,22 @@ the app on the owner's phone.
 
 Gate: a debug APK installs and a full solo battle completes on a real device.
 
+> **Status: partially built.** Done — the Expo Router app (SDK 57 / RN 0.86),
+> `@ptb/core` wired through a monorepo Metro config, NativeWind with the web
+> app's tokens converted from oklch to hex, a home screen, a solo battle screen
+> driving the real engine, and a result summary. CI gained a fourth gate,
+> `npm run bundle`, because Metro resolution failures are invisible to tsc and
+> eslint.
+>
+> Not done — boot splash, trainer creation, partner pick, profile card,
+> MMKV/Zustand save sync, `expo-audio` / `expo-haptics`, and bundling the sprite
+> and chrome art. **The gate below has NOT been met**: there is no Android SDK
+> or emulator in this environment, so nothing has run on a device.
+>
+> The app currently plays the bundled six-question fallback, not the seeded
+> bank: the game RPCs are granted to `authenticated`, and anonymous sign-in is
+> still disabled.
+>
 > The question bank is seeded, so this phase is no longer blocked on content —
 > `get_trivia_questions` and `get_daily_questions` both return real questions
 > today. The remaining blocker for anything touching a player identity is that

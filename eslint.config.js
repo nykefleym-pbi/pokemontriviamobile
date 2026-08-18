@@ -26,6 +26,22 @@ export default tseslint.config(
   },
 
   {
+    // Metro, Babel and Tailwind configs are loaded by Node before any bundler
+    // runs, so they are CommonJS by necessity, not by choice.
+    files: ["**/*.config.js", "**/metro.config.js", "**/babel.config.js"],
+    languageOptions: {
+      sourceType: "commonjs",
+      globals: {
+        module: "writable",
+        require: "readonly",
+        __dirname: "readonly",
+        process: "readonly",
+      },
+    },
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
+
+  {
     // packages/core is the isomorphic battle engine: the same files run in the
     // Expo app (optimistic preview) and in Edge Functions (authority). Nothing
     // in here may touch UI, the network, or ambient randomness/time.

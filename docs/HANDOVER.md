@@ -9,7 +9,9 @@ for the full phased plan.
   See *Phase 1 boundary* in `docs/ROADMAP.md` for exactly what is in, what is
   out, and why. Do not widen it casually.
 - **Phase 2 (Supabase schema) — done.** 7 migrations applied.
-- **Phase 3 (`apps/mobile`, the Expo app) — not started. It does not exist.**
+- **Phase 3 (`apps/mobile`, the Expo app) — scaffolded, not finished.** It
+  builds, bundles and plays a solo battle. Most of the phase's screens do not
+  exist yet — see *The Expo app* below for exactly what is and is not there.
 
 The original bootstrap commit was lost — it lived only in a container whose
 session could clone `pokemontriviamobile` but never push to it, and the rescue
@@ -178,6 +180,54 @@ engine** — both modules are imported type-only and neither function has a call
 anywhere in the package (verified, not assumed) — so the replay guarantee holds.
 Whichever phase first *calls* one of these must give it an `Rng` parameter and
 delete the corresponding exception.
+
+## The Expo app
+
+Expo SDK 57, React Native 0.86, expo-router, NativeWind 4 (with Tailwind **3.x**
+— NativeWind 4 targets v3's config format, not v4's CSS-first one).
+
+**What works today:** home screen, a playable solo battle driven by the real
+engine, and a result summary. `npm run bundle` produces a 4.3 MB Android bundle.
+
+**What the ROADMAP's Phase 3 lists that is NOT built:** boot splash, trainer
+creation, partner pick, the profile card, MMKV/Zustand save sync, `expo-audio` /
+`expo-haptics`, and bundling the sprite and chrome art. The phase's gate — a
+debug APK completing a battle on a real device — has NOT been met; there is no
+Android SDK or emulator in this environment, so nothing here has ever run on a
+device.
+
+### The Metro config is load-bearing
+
+`apps/mobile/metro.config.js` sets `watchFolders`, `nodeModulesPaths` and
+`disableHierarchicalLookup`. Without it `@ptb/core` does not resolve at bundle
+time **even though `tsc` and eslint are perfectly happy** — they resolve through
+`node_modules`, Metro does not. That failure shows up as a red screen on a
+phone, not in CI.
+
+So CI runs a fourth gate, `npm run bundle`, purely to catch it. It is the only
+check that exercises Metro. Verified by grepping the emitted Hermes bytecode for
+engine strings (`in_progress`, `confused`, `poisoned`) and Pokédex data — the
+bundle genuinely contains `packages/core`, rather than merely building.
+
+### The client does not hold the answer key, and the battle screen shows why
+
+`get_trivia_questions` projects `correct_index` away, so the app cannot grade an
+answer itself. The battle screen therefore calls `grade_trivia_answer` and feeds
+the resulting boolean into `applyAnswer` — it drives `applyRoundStart` then
+`applyAnswer` in that order, which is the same order `solo-battle-replay.ts` uses
+server-side, so this optimistic preview and the eventual authoritative replay
+agree rather than drifting.
+
+A bundled six-question set is the offline fallback and carries its own answers,
+graded locally. **The app plays on that set today**, because the game RPCs are
+granted to `authenticated` and anonymous sign-in is still disabled — so the
+seeded 3,989 are unreachable from the app until that switch is flipped.
+
+### Colours were converted, not eyeballed
+
+The web app's tokens are `oklch`, which React Native cannot parse. They were
+converted to sRGB hex and live in `tailwind.config.js` — `#ee343b` poké-red,
+`#f9c718` yellow, `#0076d2` blue, `#0f1b2d` dark.
 
 ## Deliberately deferred
 
