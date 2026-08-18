@@ -10,7 +10,9 @@
     "./pokemon-data": "./src/lib/pokemon-data.ts",
     "./abilities": "./src/lib/abilities.ts",
     "./trivia": "./src/lib/trivia-core.ts",
-    "./level-curve": "./src/lib/level-curve.ts"
+    "./level-curve": "./src/lib/level-curve.ts",
+    "./gym-leaders": "./src/lib/gym-leaders.ts",
+    "./elite-four": "./src/lib/elite-four.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

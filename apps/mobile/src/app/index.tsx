@@ -14,6 +14,8 @@ export default function Home() {
   const musicOn = useTrainer((s) => s.musicOn);
   const setMusic = useTrainer((s) => s.setMusicOn);
   const dex = useTrainer((s) => s.dex);
+  const level = useTrainer((s) => s.level);
+  const badges = useTrainer((s) => s.badges);
   const reset = useTrainer((s) => s.reset);
 
   // Rendering onboarding before the store has read from disk would flash a
@@ -60,7 +62,9 @@ export default function Home() {
           </View>
           <View className="flex-1">
             <Text className="text-xl font-extrabold text-poke-dark">{trainerName}</Text>
-            <Text className="text-xs capitalize text-muted-foreground">{sprite} · Level 5</Text>
+            <Text className="text-xs capitalize text-muted-foreground">
+              {sprite} · Level {level} · {badges.length} badges
+            </Text>
             {friendCode && (
               <Text className="text-xs text-muted-foreground">
                 Friend code <Text className="font-bold text-poke-dark">{friendCode}</Text>
@@ -97,6 +101,21 @@ export default function Home() {
             {partner ? "Start a solo battle" : "Choose a partner"}
           </Text>
         </Pressable>
+
+        <View className="flex-row gap-3">
+          <Pressable
+            onPress={() => router.push("/gyms")}
+            className="flex-1 rounded-card border border-border bg-card px-4 py-3 active:opacity-80"
+          >
+            <Text className="text-center text-sm font-bold text-poke-dark">Gyms</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push("/elite")}
+            className="flex-1 rounded-card border border-border bg-card px-4 py-3 active:opacity-80"
+          >
+            <Text className="text-center text-sm font-bold text-poke-dark">Elite Four</Text>
+          </Pressable>
+        </View>
 
         <Pressable
           onPress={() => router.push("/dex")}

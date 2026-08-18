@@ -347,6 +347,38 @@ The web app's tokens are `oklch`, which React Native cannot parse. They were
 converted to sRGB hex and live in `tailwind.config.js` — `#ee343b` poké-red,
 `#f9c718` yellow, `#0076d2` blue, `#0f1b2d` dark.
 
+## Gyms and the Elite Four
+
+43 gym leaders across 5 regions and 21 Elite Four challengers, both driving the
+same battle screen via `/battle?gym=<id>` or `/battle?elite=<id>`. An Elite
+challenge runs in the engine's `"elite"` mode, which is where its 200 HP comes
+from. Beating a leader awards a badge; beating a challenger records it.
+
+**The widening of `packages/core` was much smaller than expected.** Adding
+`gym-leaders.ts` and `elite-four.ts` pulled in *nothing* else: the closure went
+73 → 75 source files, still zero bare imports, still no `../lib/store`. The
+warning in *Phase 1 boundary* was aimed at the PvP and Mega modules and remains
+true for those — it simply did not apply here. All 79 files remain
+byte-identical to their web-app originals.
+
+`pickRandomGymLeader` is the **third** entry in the eslint impurity register: it
+calls `Math.random` inside the engine package. Unlike the other two it is
+tempting to call, so note that the app deliberately does **not** — challenges
+are routed by explicit id, which keeps a gym battle as reproducible as a solo
+one. Verified: nothing outside its own file references it.
+
+**Badge and trainer art is not shown.** Both files carry web-absolute paths
+(`/badges/{slug}.png`, `/trainers/elite/{slug}.png`) that mean nothing in React
+Native, so the signature Pokémon sprite stands in. Unlike the Pokémon sprites,
+this art *is* local to the web repo (`public/badges` 7.7 MB, `public/trainers`
+6.3 MB), so bundling it is possible from here — it just needs a static
+`require` map, since React Native cannot resolve a path built at runtime.
+
+**`level` is a placeholder economy.** It rises by one per battle won, capped at
+50, purely so the Elite Four's `unlockLevel` 5–50 gating means something. The
+web app has a real XP curve; porting it is Phase 5 item 4 (level rewards).
+Do not build anything on the current formula.
+
 ## The Pokédex
 
 1,025 entries from `packages/core`, with search by name or number, a detail

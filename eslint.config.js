@@ -109,10 +109,19 @@ export default tseslint.config(
     // verified, not assumed. They ride along because the types live in the same
     // file. So the replay guarantee is intact today.
     //
+    // `pickRandomGymLeader` (gym-leaders.ts) is the third. Same reasoning, but
+    // note it is more tempting to call than the other two: the app deliberately
+    // does NOT, and picks its own opponent instead, so a gym battle stays as
+    // replayable as a solo one.
+    //
     // Whichever phase first CALLS one of these must give it an Rng parameter
     // instead, and delete the corresponding line below. Until then this is the
     // register of known impurity — keep it short.
-    files: ["packages/core/src/lib/abilities.ts", "packages/core/src/lib/trivia-core.ts"],
+    files: [
+      "packages/core/src/lib/abilities.ts",
+      "packages/core/src/lib/trivia-core.ts",
+      "packages/core/src/lib/gym-leaders.ts",
+    ],
     rules: { "no-restricted-syntax": "off" },
   },
 );

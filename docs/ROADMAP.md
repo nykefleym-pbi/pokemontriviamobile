@@ -381,7 +381,10 @@ In dependency order, each ending in a new internal-testing build:
    seen/caught states, caught count on home and mirrored to `profiles`.
    Backdrops are not built (they need bundled art). Encountering marks *seen*,
    winning marks *caught* — the loop the rest of the collection hangs off.
-2. **Gym leagues / Elite Four** — `gym-leaders.ts`, `elite-four.ts`, badges, trophies.
+2. **Gym leagues / Elite Four** — ✅ **done**: 43 leaders across 5 regions, 21
+   Elite Four challengers gated on level, badges tracked, and both wired into
+   the battle screen by explicit id. Trophies are not built. Badge and trainer
+   art is not bundled — see below.
 3. **Who's That Pokémon** — both modes, including the silhouette sizing lesson
    already learned (size the sprite as a share of its panel, never fixed inside an
    `overflow-hidden` box).
@@ -396,8 +399,11 @@ In dependency order, each ending in a new internal-testing build:
 8. **Social** — friends, referrals, share cards (`expo-sharing` + `react-native-view-shot`
    in place of the canvas-based `share-card-builder.ts`).
 
-> Items 2, 5 and 6 each need `packages/core` widened first — see *Phase 1 boundary*
-> for exactly which modules and the `../lib/store` trap to avoid.
+> Item 2's widening is **done and was far smaller than feared**: `gym-leaders.ts`
+> and `elite-four.ts` pull in *nothing* new — the closure went 73 → 75 source
+> files (77 → 79 with tests), with zero bare imports and no `../lib/store`
+> anywhere near them. The caution in *Phase 1 boundary* was aimed at the PvP and
+> Mega modules, and still applies to items 5 and 6; it did not apply here.
 
 ## Deliberately out of scope
 

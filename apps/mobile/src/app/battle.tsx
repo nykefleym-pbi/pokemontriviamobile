@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { applyAnswer, applyRoundStart, type BattleEvent, type BattleState } from "@ptb/core";
 import { findPokemon, spriteUrl, type PokeEntry } from "@ptb/core/pokemon-data";
+import { findGymLeader } from "@ptb/core/gym-leaders";
+import { getEliteById } from "@ptb/core/elite-four";
 import {
   buildCfg,
   DEFAULT_PARTNER_ID,
@@ -75,6 +77,10 @@ export default function Battle() {
   const musicOn = useTrainer((s) => s.musicOn);
   const markSeen = useTrainer((s) => s.markSeen);
   const markCaught = useTrainer((s) => s.markCaught);
+  const awardBadge = useTrainer((s) => s.awardBadge);
+  const awardElite = useTrainer((s) => s.awardElite);
+  const recordWin = useTrainer((s) => s.recordWin);
+  const { gym, elite } = useLocalSearchParams<{ gym?: string; elite?: string }>();
 
   useEffect(() => {
     let alive = true;
@@ -86,20 +92,29 @@ export default function Battle() {
       // `gradeAnswer` and is fed straight into applyAnswer.
       const shapes = qs.local ?? FALLBACK_QUESTIONS.slice(0, qs.served.length);
       const partner = findPokemon(partnerId ?? DEFAULT_PARTNER_ID) ?? findPokemon(DEFAULT_PARTNER_ID)!;
-      const opponent = pickOpponent(partner);
+
+      // A gym or Elite Four challenge fixes the opponent; a plain solo battle
+      // rolls one. `pickRandomGymLeader` in packages/core is deliberately NOT
+      // used — it calls Math.random inside the engine package, and routing the
+      // choice through an explicit id keeps a challenge reproducible.
+      const leader = gym ? findGymLeader(gym) : undefined;
+      const challenger = elite ? getEliteById(elite) : undefined;
+      const foeId = leader?.signaturePokemonId ?? challenger?.signaturePokemonId;
+      const opponent = foeId ? (findPokemon(foeId) ?? pickOpponent(partner)) : pickOpponent(partner);
+      const mode = challenger ? "elite" : "battle";
       if (!alive) return;
       setSides({ partner, opponent });
       // Encountering is seeing. Winning is catching — that is the whole loop.
       markSeen(opponent.id);
       markCaught(partner.id);
       setSet(qs);
-      setRuntime(startBattle(buildCfg(shapes, partner, opponent)));
+      setRuntime(startBattle(buildCfg(shapes, partner, opponent, 5, mode)));
       askedAt.current = Date.now();
     });
     return () => {
       alive = false;
     };
-  }, [partnerId, markSeen, markCaught]);
+  }, [partnerId, markSeen, markCaught, gym, elite]);
 
   // BGM follows the screen, not the battle: leaving mid-fight must stop it, or
   // the loop keeps playing under the home screen.
@@ -140,7 +155,12 @@ export default function Battle() {
 
         if (res.state.phase !== "in_progress") {
           playBattleResult(res.state.phase === "won");
-          if (res.state.phase === "won" && sides) markCaught(sides.opponent.id);
+          if (res.state.phase === "won") {
+            if (sides) markCaught(sides.opponent.id);
+            recordWin();
+            if (gym) awardBadge(gym);
+            if (elite) awardElite(elite);
+          }
         }
 
         const events = [...rs.events, ...res.events];
@@ -159,7 +179,7 @@ export default function Battle() {
         setBusy(false);
       }
     },
-    [set, runtime, busy, done, idx, sides, markCaught],
+    [set, runtime, busy, done, idx, sides, markCaught, recordWin, awardBadge, awardElite, gym, elite],
   );
 
   const summary = useMemo(() => {

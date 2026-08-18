@@ -59,6 +59,18 @@ interface TrainerState {
   dex: Record<string, "seen" | "caught">;
   markSeen: (id: number) => void;
   markCaught: (id: number) => void;
+  /** Gym leader ids defeated. */
+  badges: string[];
+  /** Elite Four member ids defeated. */
+  eliteDefeated: string[];
+  /** PLACEHOLDER economy. The web app has a real XP curve; porting it is Phase
+   *  5 item 4 (level rewards). Until then level rises one per battle won, which
+   *  is enough to gate the Elite Four's unlockLevel 5..50 without inventing an
+   *  XP formula that would then have to be un-invented. */
+  level: number;
+  awardBadge: (gymId: string) => void;
+  awardElite: (eliteId: string) => void;
+  recordWin: () => void;
   setTrainer: (name: string, sprite: TrainerSprite) => void;
   setPartner: (id: number) => void;
   reset: () => void;
@@ -75,6 +87,9 @@ export const useTrainer = create<TrainerState>()(
       friendCode: null,
       musicOn: true,
       dex: {},
+      badges: [],
+      eliteDefeated: [],
+      level: 1,
       setTrainer: (trainerName, sprite) => set({ trainerName: trainerName.trim(), sprite }),
       setPartner: (partnerId) => set({ partnerId }),
       setMusicOn: (musicOn) => set({ musicOn }),
@@ -85,7 +100,23 @@ export const useTrainer = create<TrainerState>()(
           return { dex: { ...s.dex, [String(id)]: "seen" } };
         }),
       markCaught: (id) => set((s) => ({ dex: { ...s.dex, [String(id)]: "caught" } })),
-      reset: () => set({ trainerName: null, sprite: "red", partnerId: null, dex: {} }),
+      awardBadge: (gymId) =>
+        set((s) => (s.badges.includes(gymId) ? s : { badges: [...s.badges, gymId] })),
+      awardElite: (eliteId) =>
+        set((s) =>
+          s.eliteDefeated.includes(eliteId) ? s : { eliteDefeated: [...s.eliteDefeated, eliteId] },
+        ),
+      recordWin: () => set((s) => ({ level: Math.min(50, s.level + 1) })),
+      reset: () =>
+        set({
+          trainerName: null,
+          sprite: "red",
+          partnerId: null,
+          dex: {},
+          badges: [],
+          eliteDefeated: [],
+          level: 1,
+        }),
     }),
     {
       name: "trainer",
@@ -99,6 +130,9 @@ export const useTrainer = create<TrainerState>()(
         partnerId: s.partnerId,
         musicOn: s.musicOn,
         dex: s.dex,
+        badges: s.badges,
+        eliteDefeated: s.eliteDefeated,
+        level: s.level,
       }),
       // Nothing should render a "create your trainer" prompt before the store
       // has actually read from disk, or a returning player sees onboarding for
