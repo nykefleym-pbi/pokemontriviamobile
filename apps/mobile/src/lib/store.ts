@@ -79,6 +79,9 @@ interface TrainerState {
   giftStreak: number;
   giftFreezeUsed: string | null;
   buyItem: (id: string, cost: number) => boolean;
+  /** Returns false when none are held, so a caller cannot spend what the
+   *  player does not have by forgetting to check first. */
+  consumeItem: (id: string) => boolean;
   claimGift: (today: string, day: number, usedFreeze: boolean, coins: number) => void;
   awardBadge: (gymId: string) => void;
   awardElite: (eliteId: string) => void;
@@ -130,6 +133,14 @@ export const useTrainer = create<TrainerState>()(
         useTrainer.setState({
           coins: s.coins - cost,
           inventory: { ...s.inventory, [id]: (s.inventory[id] ?? 0) + 1 },
+        });
+        return true;
+      },
+      consumeItem: (id) => {
+        const s = useTrainer.getState();
+        if ((s.inventory[id] ?? 0) < 1) return false;
+        useTrainer.setState({
+          inventory: { ...s.inventory, [id]: s.inventory[id] - 1 },
         });
         return true;
       },
