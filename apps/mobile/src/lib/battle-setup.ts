@@ -6,31 +6,34 @@ import {
   type BattleState,
   type SoloBattleCfg,
 } from "@ptb/core";
+import type { PokeEntry } from "@ptb/core/pokemon-data";
 import type { Trivia } from "@ptb/core/trivia";
+import { STARTERS } from "./partners";
 
-/** A placeholder matchup until partner selection exists (ROADMAP Phase 3).
- *  Bulbasaur (grass) vs Charmander (fire) is the same fixture the ported
- *  engine tests use, so a battle here and a passing test exercise the same
- *  type matchup — the player is at a disadvantage, which is the interesting
- *  case rather than the flattering one. */
-export const DEMO_MATCHUP = {
-  playerPokemonId: 1,
-  playerTypes: ["grass"] as const,
-  enemyPokemonId: 4,
-  enemyTypes: ["fire"] as const,
-  level: 5,
-};
+/** Used only when no partner has been chosen yet — Bulbasaur, the same fixture
+ *  the ported engine tests use. */
+export const DEFAULT_PARTNER_ID = 1;
 
-export function buildCfg(questions: Trivia[]): SoloBattleCfg {
+export function pickOpponent(partner: PokeEntry): PokeEntry {
+  const others = STARTERS.filter((p) => p.id !== partner.id);
+  return others[Math.floor(Math.random() * others.length)] ?? partner;
+}
+
+export function buildCfg(
+  questions: Trivia[],
+  partner: PokeEntry,
+  opponent: PokeEntry,
+  level = 5,
+): SoloBattleCfg {
   return {
     questions,
-    playerPokemonId: DEMO_MATCHUP.playerPokemonId,
-    playerTypes: [...DEMO_MATCHUP.playerTypes],
+    playerPokemonId: partner.id,
+    playerTypes: [...partner.types],
     abilityId: null,
-    level: DEMO_MATCHUP.level,
+    level,
     mode: "battle",
-    enemyPokemonId: DEMO_MATCHUP.enemyPokemonId,
-    enemyTypes: [...DEMO_MATCHUP.enemyTypes],
+    enemyPokemonId: opponent.id,
+    enemyTypes: [...opponent.types],
     trainingPoints: 0,
     items: {
       assaultVestActive: false,
@@ -56,7 +59,10 @@ export interface BattleRuntime {
  *  the action log, which is what makes the whole battle replayable and
  *  therefore checkable. Ambient randomness is fine HERE — this is app code,
  *  not engine code; `packages/core` may never call Math.random. */
-export function startBattle(cfg: SoloBattleCfg, seed = String(Math.random()).slice(2)): BattleRuntime {
+export function startBattle(
+  cfg: SoloBattleCfg,
+  seed = String(Math.random()).slice(2),
+): BattleRuntime {
   const setup = resolveBattleSetup(cfg);
   const state = initialBattleState(
     setup.config.playerMaxHp,

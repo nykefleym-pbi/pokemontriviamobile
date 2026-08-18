@@ -186,15 +186,31 @@ delete the corresponding exception.
 Expo SDK 57, React Native 0.86, expo-router, NativeWind 4 (with Tailwind **3.x**
 — NativeWind 4 targets v3's config format, not v4's CSS-first one).
 
-**What works today:** home screen, a playable solo battle driven by the real
-engine, and a result summary. `npm run bundle` produces a 4.3 MB Android bundle.
+**What works today:** trainer creation, partner pick, a home screen showing
+both, a playable solo battle driven by the real engine against the chosen
+partner, and a result summary. Trainer name, sprite and partner persist locally
+via Zustand + MMKV. `npm run bundle` produces a 4.3 MB Android bundle.
 
-**What the ROADMAP's Phase 3 lists that is NOT built:** boot splash, trainer
-creation, partner pick, the profile card, MMKV/Zustand save sync, `expo-audio` /
+**What the ROADMAP's Phase 3 lists that is NOT built:** boot splash, save SYNC
+(the store is local-only — nothing writes to `saves` yet), `expo-audio` /
 `expo-haptics`, and bundling the sprite and chrome art. The phase's gate — a
 debug APK completing a battle on a real device — has NOT been met; there is no
 Android SDK or emulator in this environment, so nothing here has ever run on a
 device.
+
+### MMKV means Expo Go will not run this app
+
+`react-native-mmkv` v4 is a Nitro native module, and Expo Go ships a fixed set of
+native modules that does not include it. Running the app therefore needs a
+**development build** (`npx expo run:android`, or an EAS dev build), not the Expo
+Go client. This is a consequence of the ROADMAP's MMKV choice, not an accident —
+Phase 4 produces a real APK anyway. If Expo Go convenience matters before then,
+`@react-native-async-storage/async-storage` is the swap, and only
+`src/lib/store.ts` would change.
+
+Its v4 API is also not what most examples show: `MMKV` is a **type-only** export,
+instances come from `createMMKV({ id })`, and the delete method is `remove`, not
+`delete`.
 
 ### The Metro config is load-bearing
 
@@ -208,6 +224,18 @@ So CI runs a fourth gate, `npm run bundle`, purely to catch it. It is the only
 check that exercises Metro. Verified by grepping the emitted Hermes bytecode for
 engine strings (`in_progress`, `confused`, `poisoned`) and Pokédex data — the
 bundle genuinely contains `packages/core`, rather than merely building.
+
+### Trainer name validation mirrors the database on purpose
+
+`validateTrainerName` enforces 3–16 characters, which is exactly
+`profiles.trainer_name`'s check constraint. Letting the two drift would mean a
+name the app accepts and the database rejects — surfacing at sync time, long
+after the player chose it.
+
+Not yet enforced client-side: the **unique index on `lower(trainer_name)`**. The
+app cannot check uniqueness without a session, so a duplicate name will be
+accepted locally and rejected on first sync. Whichever phase adds sign-in has to
+handle that collision rather than assume the local name is free.
 
 ### The client does not hold the answer key, and the battle screen shows why
 
