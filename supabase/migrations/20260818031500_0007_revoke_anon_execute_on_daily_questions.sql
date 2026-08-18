@@ -1,0 +1,25 @@
+-- 0006 revoked EXECUTE on get_daily_questions from PUBLIC and stopped there,
+-- citing the 0004/0005 lesson while applying only half of it. A verification
+-- probe caught that `anon` could still call it.
+--
+-- The full mechanism, now measured rather than assumed. A new function in
+-- Supabase's `public` schema is granted EXECUTE TWICE, by two different
+-- mechanisms:
+--
+--   1. Postgres grants EXECUTE to the PUBLIC pseudo-role on every new
+--      function. `anon` inherits this.
+--   2. Supabase ships ALTER DEFAULT PRIVILEGES that grant EXECUTE **directly**
+--      to `anon` and `authenticated`.
+--
+-- Revoking either one alone leaves the other standing. That is why 0004
+-- (anon only) did not work, why 0005 (public only) was needed, and why the two
+-- together finally closed it for the game RPCs. The ACL shows the difference
+-- plainly -- a direct grant appears as its own entry:
+--
+--   get_daily_questions  {postgres=X/postgres,anon=X/postgres,...}   <- leaked
+--   get_trivia_questions {postgres=X/postgres,authenticated=X/...}   <- closed
+--
+-- Every future SECURITY DEFINER function needs BOTH revokes. Verify with
+-- has_function_privilege('anon', ..., 'EXECUTE') -- never by reading the
+-- migration and assuming.
+revoke execute on function public.get_daily_questions(date) from anon;
