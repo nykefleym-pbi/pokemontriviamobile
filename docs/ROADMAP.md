@@ -391,11 +391,12 @@ In dependency order, each ending in a new internal-testing build:
    entry→name. Four are built; `3` needs cry audio and `5` needs a
    flavour-text endpoint, neither of which the app fetches yet, so a round
    landing on either is re-rolled. The silhouette follows the sizing rule.
-4. **Shop, items, daily gift, achievements, level rewards** — 🟡 **partly
-   done**: the real XP/level economy is in (`battleReward`, `levelFromTotalXp`,
-   ranks, coins and TP), replacing the placeholder that counted wins. The item
-   catalog is in `packages/core`. **Not built:** shop UI, inventory, daily
-   gift, achievements.
+4. **Shop, items, daily gift, achievements, level rewards** — 🟡 **mostly
+   done**: the real XP/level economy (`battleReward`, `levelFromTotalXp`,
+   ranks, coins, TP), a coin shop over the ported item catalog, an inventory,
+   and the 7-day daily gift with its miss-forgiveness and welcome-back purse.
+   **Not built:** consuming items in battle (there is no bag UI), and
+   **achievements** — see below for why those are not a port.
 5. **Mega raids** — needs `mega_*` tables and the `mega-run` / `mega-reward-claim`
    Edge Functions ported.
 6. **PvP** — the largest slice by far: live matches, queue, chat, moderation,

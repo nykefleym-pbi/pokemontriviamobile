@@ -4,6 +4,7 @@ import { findPokemon, spriteUrl } from "@ptb/core/pokemon-data";
 import { countCaught, DEX_TOTAL } from "../lib/dex";
 import { levelFromTotalXp, rankForLevel, xpProgressInLevel } from "@ptb/core/game-data";
 import { useTrainer } from "../lib/store";
+import { DailyGift } from "../components/daily-gift";
 
 export default function Home() {
   const router = useRouter();
@@ -87,6 +88,8 @@ export default function Home() {
           )}
         </View>
 
+        <DailyGift />
+
         {partner ? (
           <Text className="text-center text-sm text-muted-foreground">
             Partner: <Text className="font-bold text-poke-dark">{partner.name}</Text> (
@@ -115,6 +118,12 @@ export default function Home() {
             className="flex-1 rounded-card border border-border bg-card px-4 py-3 active:opacity-80"
           >
             <Text className="text-center text-sm font-bold text-poke-dark">Gyms</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push("/shop")}
+            className="flex-1 rounded-card border border-border bg-card px-4 py-3 active:opacity-80"
+          >
+            <Text className="text-center text-sm font-bold text-poke-dark">Shop</Text>
           </Pressable>
           <Pressable
             onPress={() => router.push("/elite")}

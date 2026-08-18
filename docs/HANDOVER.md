@@ -364,10 +364,47 @@ Still missing from ROADMAP item 4: shop UI, inventory, daily gift, achievements.
 The item catalog is already in `packages/core`, so those are UI and state work
 rather than more porting.
 
-### Two files are NOT byte-identical, and why
+### Shop, inventory and the daily gift
 
-`lib/rewards/index.ts` and `lib/rewards/index.test.ts` are the **only** ported
-files that differ from their web originals. Each differs by exactly one line:
+The shop sells the ported item catalog for coins, filtered to what a solo
+player can actually use: no `premium` (not bought with coins), no `pvpOnly`, no
+berries (Nearby-Battle only). Purchases are held in an inventory — but
+**nothing consumes them yet**: the battle screen has no bag. Buying is real,
+using is not.
+
+The daily gift uses `packages/core`'s `planDailyGift`, so the interesting part —
+a missed day being forgiven once a week, and the welcome-back purse after a
+3-day gap — behaves exactly as it does on the web. The app only stores that
+function's inputs and grants what it returns.
+
+One mobile-specific care: the "today" string is built from **local** date parts,
+not `toISOString().slice(0, 10)`. The latter is UTC, so a player east or west of
+it would see the gift flip at the wrong hour — precisely the class of bug the
+module's own header warns calendar arithmetic invites.
+
+Day 7 pays coins and XP that scale with the day. The web app's day 7 is a
+guaranteed shiny, which needs a Pokémon to attach it to; that arrives with
+whatever phase adds shiny encounters.
+
+### Achievements are NOT a port, and should not be forced into one
+
+`src/lib/achievements.ts` in the web app types every predicate as
+`check: (s: GameState) => boolean`, where `GameState` is the **zustand store's**
+shape. Two problems, and only the first is about imports:
+
+1. It imports from `./store`, which `packages/core` may never reach.
+2. More fundamentally, the predicates read fields the mobile store does not
+   have and should not grow just to match a different app's state.
+
+Achievements for this app have to be **authored against this app's state**. That
+is a design task, not a port, and pulling the file across would produce a set of
+checks that silently never fire.
+
+### Three files are NOT byte-identical, and why
+
+`lib/rewards/index.ts`, `lib/rewards/index.test.ts` and `lib/daily-gift.test.ts`
+are the **only** ported files that differ from their web originals. Each differs
+by exactly one import line:
 
 ```
 - import { streakMultiplier } from "@/engine/damage";
@@ -375,6 +412,9 @@ files that differ from their web originals. Each differs by exactly one line:
 
 - } from "@/lib/rewards";
 + } from "./index";
+
+- } from "@/lib/daily-gift";
++ } from "./daily-gift";
 ```
 
 `packages/core` has **no `@/` alias and must not gain one** — every other tool
@@ -385,9 +425,10 @@ invariant; byte-identity is a verification technique serving it, not the goal.
 
 **How this was nearly missed.** The closure script used to plan every port
 *resolves* `@/` — so an aliased import looks perfectly resolved and never shows
-up as unresolved. It was caught only because `tsc` failed. Any future port must
-`grep -rn 'from "@/'` over the copied files explicitly; the closure script will
-not tell you.
+up as unresolved. The first two were caught only because `tsc` failed. Any port
+must `grep -rn 'from "@/'` over the copied files explicitly; the closure script
+will not tell you. Running that check immediately caught the third
+(`daily-gift.test.ts`) before it reached a build, which is the habit working.
 
 ### A fifth impurity-register entry, and it is the benign kind
 
