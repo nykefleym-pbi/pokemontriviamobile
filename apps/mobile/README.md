@@ -1,56 +1,35 @@
-# Welcome to your Expo app 👋
+# `@ptb/mobile`
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+The Expo app. Expo SDK 57 · React Native 0.86 · expo-router · NativeWind 4.
 
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```sh
+npm install          # from the repo root — this is an npm workspace
+npm run typecheck --workspace @ptb/mobile
+npm run bundle    --workspace @ptb/mobile   # Metro bundle, the CI gate
+npm start         --workspace @ptb/mobile   # dev server
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Two things to know before changing anything
 
-### Other setup steps
+**`metro.config.js` is load-bearing.** It sets `watchFolders`,
+`nodeModulesPaths` and `disableHierarchicalLookup` so Metro can resolve
+`@ptb/core` out of the workspace root. Break it and `tsc` and eslint still
+pass — Metro resolution is invisible to them — and the app red-screens on a
+phone instead. `npm run bundle` is in CI for exactly this reason.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+**The client never holds the answer key.** `get_trivia_questions` projects
+`correct_index` away, so `src/lib/questions.ts` asks `grade_trivia_answer` for
+correctness and feeds the boolean into the engine. Do not add a local
+comparison — see `docs/HANDOVER.md`.
 
-## Learn more
+## Status
 
-To learn more about developing your project with Expo, look at the following resources:
+Built: home, a solo battle driven by `@ptb/core`, a result summary.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Not built: boot splash, trainer creation, partner pick, profile card, save sync
+(MMKV/Zustand), audio, haptics, sprite bundling. Nothing has run on a real
+device yet. See `docs/ROADMAP.md` Phase 3.
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+The app currently plays a bundled six-question fallback. The seeded bank of
+3,989 needs a signed-in session, and anonymous sign-in is still disabled in the
+Supabase dashboard.
