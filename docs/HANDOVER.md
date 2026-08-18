@@ -186,14 +186,15 @@ delete the corresponding exception.
 Expo SDK 57, React Native 0.86, expo-router, NativeWind 4 (with Tailwind **3.x**
 — NativeWind 4 targets v3's config format, not v4's CSS-first one).
 
-**What works today:** trainer creation, partner pick, a home screen showing
-both, a playable solo battle driven by the real engine against the chosen
-partner, and a result summary. Trainer name, sprite and partner persist locally
-via Zustand + MMKV. `npm run bundle` produces a 4.3 MB Android bundle.
+**What works today:** anonymous sign-in, trainer creation (with the name
+claimed against the server's unique index), partner pick, a home screen showing
+both plus the server-allocated friend code, a playable solo battle driven by the
+real engine against the chosen partner, a result summary, and save sync to the
+`saves` table. Trainer state persists locally via Zustand + MMKV and is pushed
+to the server. `npm run bundle` produces a 4.3 MB Android bundle.
 
-**What the ROADMAP's Phase 3 lists that is NOT built:** boot splash, save SYNC
-(the store is local-only — nothing writes to `saves` yet), `expo-audio` /
-`expo-haptics`, and bundling the sprite and chrome art. The phase's gate — a
+**What the ROADMAP's Phase 3 lists that is NOT built:** boot splash,
+`expo-audio` / `expo-haptics`, and bundling the sprite and chrome art. The phase's gate — a
 debug APK completing a battle on a real device — has NOT been met; there is no
 Android SDK or emulator in this environment, so nothing here has ever run on a
 device.
@@ -232,10 +233,12 @@ bundle genuinely contains `packages/core`, rather than merely building.
 name the app accepts and the database rejects — surfacing at sync time, long
 after the player chose it.
 
-Not yet enforced client-side: the **unique index on `lower(trainer_name)`**. The
-app cannot check uniqueness without a session, so a duplicate name will be
-accepted locally and rejected on first sync. Whichever phase adds sign-in has to
-handle that collision rather than assume the local name is free.
+The **unique index on `lower(trainer_name)`** cannot be checked ahead of time —
+two devices can both pass local validation with the same name and only one can
+win. `claimTrainer` is therefore what decides: Postgres reports the collision as
+`23505`, and that is the one place it is distinguished from a generic failure so
+the create screen can say "that name is taken" rather than "something went
+wrong". With no session the name is kept locally and settled on the next sync.
 
 ### The client does not hold the answer key, and the battle screen shows why
 
@@ -250,6 +253,48 @@ A bundled six-question set is the offline fallback and carries its own answers,
 graded locally. **The app plays on that set today**, because the game RPCs are
 granted to `authenticated` and anonymous sign-in is still disabled — so the
 seeded 3,989 are unreachable from the app until that switch is flipped.
+
+### Sign-in, and what was verified about it
+
+The client calls `signInAnonymously()` on first launch. It does **not** create
+the profile or invent a friend code — the `after insert` trigger on `auth.users`
+does that, so collisions and squatting stay server problems.
+
+The whole chain was verified against the live project by creating two throwaway
+anonymous users and probing as `authenticated` (recording `current_user` at each
+step, so the role is provable rather than assumed):
+
+| Check | Result |
+| --- | --- |
+| trigger creates profile + friend code | both, distinct codes |
+| user1 inserts own save | allowed |
+| user1 inserts a save **for user2** | blocked |
+| user1 renames own profile | 1 row |
+| user1 renames **user2's** profile | 0 rows |
+| `saves` visible to user1 | 1 — own only |
+| `curated_questions` read **directly** | `permission denied` |
+| `get_trivia_questions` RPC | returns questions |
+
+Both test users were deleted afterwards; the cascade took their profiles and
+saves with them, and the project is back to zero rows with the 3,989 questions
+intact.
+
+A caution learned doing it: an exception inside a `DO` block rolls back the
+whole block, **including the `set role`**. The first attempt at this probe did
+that and reported `curated_questions` as readable — it was running as `postgres`
+by then, which bypasses RLS. Record `current_user` alongside every result, or a
+probe can quietly measure the wrong role.
+
+### Save sync, and the conflict case it does NOT handle
+
+`useBootSync` signs in, reconciles, then pushes debounced updates. The server
+copy is adopted only on a device with **no** local trainer — the fresh-install
+case. Otherwise local wins and is pushed.
+
+A real multi-device merge — two devices that both have progress — is **not
+implemented**. `saves.version` and `updated_at` exist to support one when a
+phase needs it; today the second device's progress would lose. Anyone adding
+multi-device play has to design that merge rather than assume this handles it.
 
 ### Colours were converted, not eyeballed
 

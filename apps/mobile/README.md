@@ -33,12 +33,12 @@ npx expo run:android      # needs an Android SDK
 
 ## Status
 
-Built: trainer creation, partner pick, home, a solo battle driven by
-`@ptb/core`, a result summary, and local persistence (Zustand + MMKV).
+Built: anonymous sign-in, trainer creation, partner pick, home with the
+server-allocated friend code, a solo battle driven by `@ptb/core`, a result
+summary, local persistence (Zustand + MMKV), and save sync to `saves`.
 
-Not built: boot splash, save sync to `saves`, audio, haptics, sprite bundling.
-Nothing has run on a real device yet. See `docs/ROADMAP.md` Phase 3.
+Not built: boot splash, audio, haptics, sprite bundling. Nothing has run on a
+real device yet. See `docs/ROADMAP.md` Phase 3.
 
-The app currently plays a bundled six-question fallback. The seeded bank of
-3,989 needs a signed-in session, and anonymous sign-in is still disabled in the
-Supabase dashboard.
+Questions come from the seeded bank of 3,989; a bundled six-question set is the
+offline fallback.

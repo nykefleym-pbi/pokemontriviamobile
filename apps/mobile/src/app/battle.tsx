@@ -198,7 +198,7 @@ export default function Battle() {
 
       {!set.fromServer && (
         <Text className="text-center text-xs text-muted-foreground">
-          Offline set — the seeded bank needs a signed-in session.
+          Offline set — could not reach the question bank.
         </Text>
       )}
 

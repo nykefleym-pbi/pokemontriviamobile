@@ -8,6 +8,7 @@ import {
   validateTrainerName,
   type TrainerSprite,
 } from "../lib/store";
+import { claimTrainer } from "../lib/sync";
 
 export default function CreateTrainer() {
   const router = useRouter();
@@ -18,13 +19,32 @@ export default function CreateTrainer() {
   const [name, setName] = useState(existingName ?? "");
   const [sprite, setSprite] = useState<TrainerSprite>(existingSprite);
   const [touched, setTouched] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const [taken, setTaken] = useState(false);
 
+  const userId = useTrainer((s) => s.userId);
   const error = validateTrainerName(name);
-  const showError = touched && error !== null;
+  const showError = (touched && error !== null) || taken;
+  const message = taken ? "That name is already taken." : error;
 
-  function submit() {
+  async function submit() {
     setTouched(true);
-    if (error) return;
+    setTaken(false);
+    if (error || claiming) return;
+
+    // The database holds a unique index on lower(trainer_name) that the app
+    // cannot check ahead of time, so the claim is what decides. With no
+    // session we save locally and let the next sync attempt settle it.
+    if (userId) {
+      setClaiming(true);
+      const result = await claimTrainer(userId, name.trim(), sprite);
+      setClaiming(false);
+      if (!result.ok && result.reason === "taken") {
+        setTaken(true);
+        return;
+      }
+    }
+
     setTrainer(name, sprite);
     router.replace("/partner");
   }
@@ -41,7 +61,10 @@ export default function CreateTrainer() {
       <View className="gap-2">
         <TextInput
           value={name}
-          onChangeText={setName}
+          onChangeText={(v) => {
+            setName(v);
+            setTaken(false);
+          }}
           onBlur={() => setTouched(true)}
           placeholder="Ash"
           placeholderTextColor="#586474"
@@ -49,13 +72,13 @@ export default function CreateTrainer() {
           autoCapitalize="words"
           autoCorrect={false}
           returnKeyType="done"
-          onSubmitEditing={submit}
+          onSubmitEditing={() => void submit()}
           className={`rounded-card border bg-card px-4 py-3 text-lg text-poke-dark ${
             showError ? "border-primary" : "border-border"
           }`}
         />
         <View className="flex-row justify-between">
-          <Text className="text-xs text-primary">{showError ? error : " "}</Text>
+          <Text className="text-xs text-primary">{showError ? message : " "}</Text>
           <Text className="text-xs text-muted-foreground">
             {name.trim().length}/{NAME_MAX}
           </Text>
@@ -99,15 +122,18 @@ export default function CreateTrainer() {
       </View>
 
       <Pressable
-        onPress={submit}
-        className={`rounded-card px-6 py-4 ${error ? "bg-muted" : "bg-primary active:opacity-80"}`}
+        onPress={() => void submit()}
+        disabled={claiming}
+        className={`rounded-card px-6 py-4 ${
+          error || claiming ? "bg-muted" : "bg-primary active:opacity-80"
+        }`}
       >
         <Text
           className={`text-center text-lg font-bold ${
-            error ? "text-muted-foreground" : "text-primary-foreground"
+            error || claiming ? "text-muted-foreground" : "text-primary-foreground"
           }`}
         >
-          Choose a partner
+          {claiming ? "Claiming name…" : "Choose a partner"}
         </Text>
       </Pressable>
     </ScrollView>

@@ -270,8 +270,12 @@ Gate: a debug APK installs and a full solo battle completes on a real device.
 > `npm run bundle`, because Metro resolution failures are invisible to tsc and
 > eslint.
 >
-> Not done — boot splash, save SYNC (the Zustand store is local-only; nothing
-> writes to `saves` yet), `expo-audio` / `expo-haptics`, and bundling the sprite
+> Also done — anonymous sign-in, the trainer name claimed against the server's
+> unique index, the friend code surfaced on home, and save sync to `saves`
+> (fresh-install adoption plus debounced pushes; a true multi-device merge is
+> explicitly not implemented).
+>
+> Not done — boot splash, `expo-audio` / `expo-haptics`, and bundling the sprite
 > and chrome art (partner sprites currently load from the PokeAPI CDN).
 > **The gate below has NOT been met**: there is no Android SDK or emulator in
 > this environment, so nothing has run on a device.
@@ -280,9 +284,8 @@ Gate: a debug APK installs and a full solo battle completes on a real device.
 > needs a development build. Swapping to AsyncStorage would restore Expo Go and
 > would touch only `src/lib/store.ts`.
 >
-> The app currently plays the bundled six-question fallback, not the seeded
-> bank: the game RPCs are granted to `authenticated`, and anonymous sign-in is
-> still disabled.
+> Anonymous sign-in is now enabled, so the app draws from the seeded 3,989
+> questions; the bundled six remain the offline fallback.
 >
 > The question bank is seeded, so this phase is no longer blocked on content —
 > `get_trivia_questions` and `get_daily_questions` both return real questions
