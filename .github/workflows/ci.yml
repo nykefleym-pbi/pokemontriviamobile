@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # Typecheck is a real gate here, not a formality. packages/core builds
+      # with lib:["ES2022"] and types:[], so `window`/`document`/`localStorage`
+      # are undeclared -- a browser global that drifts into the engine fails
+      # HERE rather than crashing on a phone or in an Edge Function.
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test

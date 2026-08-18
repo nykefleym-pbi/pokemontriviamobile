@@ -1,0 +1,26 @@
+{
+  // The load-bearing part of this file is what is ABSENT.
+  //
+  // `lib` has no "DOM" and `types` is empty, so `window`, `document`,
+  // `localStorage` and `navigator` are UNDECLARED identifiers here. A browser
+  // global that drifts into the engine fails `tsc` in CI rather than crashing
+  // on a phone or in an Edge Function. The web app's tsconfig carries
+  // lib: ["ES2022","DOM","DOM.Iterable"] and types: ["vite/client"] -- do not
+  // copy those over.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "types": [],
+
+    "strict": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "verbatimModuleSyntax": false,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true
+  },
+  "include": ["src/**/*.ts"]
+}

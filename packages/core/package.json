@@ -1,0 +1,17 @@
+{
+  "name": "@ptb/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic battle engine. Isomorphic: the Expo app and the battle Edge Function import THIS and nothing else, so there is never a second implementation to drift.",
+  "exports": {
+    ".": "./src/engine/index.ts",
+    "./type-chart": "./src/lib/type-chart.ts",
+    "./pokemon-data": "./src/lib/pokemon-data.ts",
+    "./abilities": "./src/lib/abilities.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}
