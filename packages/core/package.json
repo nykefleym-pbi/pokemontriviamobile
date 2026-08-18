@@ -14,7 +14,9 @@
     "./gym-leaders": "./src/lib/gym-leaders.ts",
     "./elite-four": "./src/lib/elite-four.ts",
     "./whos-that": "./src/lib/whos-that.ts",
-    "./items": "./src/content/items/index.ts"
+    "./items": "./src/content/items/index.ts",
+    "./rewards": "./src/lib/rewards/index.ts",
+    "./game-data": "./src/lib/game-data.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -3,6 +3,7 @@ import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-nativ
 import { checkGuess, type WhosThatRound } from "@ptb/core/whos-that";
 import { spriteUrl } from "@ptb/core/pokemon-data";
 import type { PokeType } from "@ptb/core/pokemon-data";
+import { WHOS_THAT_XP } from "@ptb/core/rewards";
 import { MODE_PROMPT, makeSupportedRound } from "../lib/whos-that-round";
 import { TYPE_COLORS } from "../lib/partners";
 import { answerHaptic } from "../lib/haptics";
@@ -13,6 +14,7 @@ const ALL_TYPES = Object.keys(TYPE_COLORS) as PokeType[];
 export default function WhosThat() {
   const markCaught = useTrainer((s) => s.markCaught);
   const markSeen = useTrainer((s) => s.markSeen);
+  const grantReward = useTrainer((s) => s.grantReward);
 
   const [round, setRound] = useState<WhosThatRound | null>(null);
   const [text, setText] = useState("");
@@ -42,7 +44,10 @@ export default function WhosThat() {
     // A correct guess is a capture, matching the web app; a wrong one still
     // counts as having seen it, since the answer is revealed either way.
     markSeen(round.monId);
-    if (ok) markCaught(round.monId);
+    if (ok) {
+      markCaught(round.monId);
+      grantReward({ xp: WHOS_THAT_XP });
+    }
   }
 
   return (

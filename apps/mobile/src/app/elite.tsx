@@ -3,12 +3,13 @@ import { useRouter } from "expo-router";
 import { ELITE_FOUR, nextPendingElite, type EliteMember } from "@ptb/core/elite-four";
 import { spriteUrl } from "@ptb/core/pokemon-data";
 import { TYPE_COLORS } from "../lib/partners";
+import { levelFromTotalXp } from "@ptb/core/game-data";
 import { useTrainer } from "../lib/store";
 
 export default function Elite() {
   const router = useRouter();
   const defeated = useTrainer((s) => s.eliteDefeated);
-  const level = useTrainer((s) => s.level);
+  const level = levelFromTotalXp(useTrainer((s) => s.xp));
   const next = nextPendingElite(level, defeated);
 
   return (
