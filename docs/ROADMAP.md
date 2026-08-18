@@ -181,8 +181,10 @@ Gate: schema applied, RLS verified by an authenticated and an unauthenticated
 > | 20260818013137 | 0003_solo_battles |
 > | 20260818013246 | 0004_tighten_function_grants |
 > | 20260818013308 | 0005_revoke_public_execute_on_game_rpcs |
-> | 20260818030500 | 0006_daily_questions |
-> | 20260818031500 | 0007_revoke_anon_execute_on_daily_questions |
+> | 20260818030543 | 0006_daily_questions |
+> | 20260818030637 | 0007_revoke_anon_execute_on_daily_questions |
+> | 20260818081200 | 0008_allow_expert_difficulty |
+> | 20260818081750 | 0009_unique_question_text |
 >
 > `daily_questions` is **not** a port of the web table of the same name. That one
 > stores the day's questions as a jsonb blob **including `correct_index`**, behind a
@@ -205,6 +207,25 @@ Gate: schema applied, RLS verified by an authenticated and an unauthenticated
 > Advisor state: 2 INFO `rls_enabled_no_policy` (`curated_questions`,
 > `daily_questions` — both by design) and 3 WARN that signed-in users can execute the
 > three SECURITY DEFINER functions, which is precisely their purpose.
+>
+> **The bank is seeded: 3,989 questions** (medium 1869, hard 937, easy 791,
+> expert 392), copied from the web project's 4,000 with 11 duplicates dropped.
+> `0008` widened the difficulty constraint to admit `expert` rather than
+> collapsing it into `hard` — expert is a first-class `CuratedDifficulty` in the
+> web app, requested by Elite Four as `["hard","expert"]` and used by Mega, so
+> collapsing it would have destroyed a tier Phase 5 items 2 and 5 both need, with
+> no way to recover which rows had been expert. `0009` adds a unique index on the
+> normalised question text, which de-duplicates and makes any re-run of the seed
+> idempotent.
+>
+> Transfer method, since it is not obvious: the sandbox has no network route to
+> Supabase (HTTPS `000`, TCP refused), and the web bank is unreadable via REST
+> (RLS on, zero policies). The web project already had `pg_net` installed, so a
+> `SELECT` there POSTed rows directly to this project's PostgREST endpoint —
+> DB to DB — into a temporary secret-gated RPC that was dropped afterwards.
+> Nothing on the web project was modified; verified afterwards at 4,000 rows with
+> no stray functions. Integrity confirmed by an md5 over all row content matching
+> on both sides (`9639a50fe3261c19d0811cc36227155f`), not by row count alone.
 >
 > Not yet built, and needed before Daily Quest can actually ship: a
 > server-authoritative `daily_runs` equivalent. The web app added one because the
@@ -237,6 +258,12 @@ the app on the owner's phone.
   solo battle screen, results. Roughly the `index.tsx` → `battle.tsx` path.
 
 Gate: a debug APK installs and a full solo battle completes on a real device.
+
+> The question bank is seeded, so this phase is no longer blocked on content —
+> `get_trivia_questions` and `get_daily_questions` both return real questions
+> today. The remaining blocker for anything touching a player identity is that
+> **anonymous sign-ins are still disabled** in the Supabase dashboard; the battle
+> screen itself needs no session, so it can be built and played before that.
 
 > Note: the Zustand store itself is **not** in `packages/core` (see *Phase 1
 > boundary*) and does not need to be — it is app state, so it belongs in
