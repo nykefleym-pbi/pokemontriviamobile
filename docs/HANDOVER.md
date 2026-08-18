@@ -347,6 +347,55 @@ The web app's tokens are `oklch`, which React Native cannot parse. They were
 converted to sRGB hex and live in `tailwind.config.js` — `#ee343b` poké-red,
 `#f9c718` yellow, `#0076d2` blue, `#0f1b2d` dark.
 
+## The XP economy
+
+`xp` is stored; **`level` is derived** from it with `levelFromTotalXp` and never
+persisted. Two fields that can disagree is exactly how a save ends up with a
+level its XP cannot justify. This replaced the earlier placeholder that simply
+counted wins.
+
+Rewards come from `packages/core`'s `battleReward`, so a battle here pays what
+the same battle pays in the web app. Mode mapping: a gym is `"weekly"`, an Elite
+Four challenge is `"elite"`, anything else is `"regular"`. Note a **loss still
+earns XP** in regular mode — that is the web behaviour, not a bug. Who's That
+pays the flat `WHOS_THAT_XP`.
+
+Still missing from ROADMAP item 4: shop UI, inventory, daily gift, achievements.
+The item catalog is already in `packages/core`, so those are UI and state work
+rather than more porting.
+
+### Two files are NOT byte-identical, and why
+
+`lib/rewards/index.ts` and `lib/rewards/index.test.ts` are the **only** ported
+files that differ from their web originals. Each differs by exactly one line:
+
+```
+- import { streakMultiplier } from "@/engine/damage";
++ import { streakMultiplier } from "../../engine/damage";
+
+- } from "@/lib/rewards";
++ } from "./index";
+```
+
+`packages/core` has **no `@/` alias and must not gain one** — every other tool
+that resolves modules (tsc, vitest, Metro, esbuild) would need it configured,
+and keeping imports relative is what makes the package work in all four without
+setup. Between "byte-identical" and "no aliases", the second is the load-bearing
+invariant; byte-identity is a verification technique serving it, not the goal.
+
+**How this was nearly missed.** The closure script used to plan every port
+*resolves* `@/` — so an aliased import looks perfectly resolved and never shows
+up as unresolved. It was caught only because `tsc` failed. Any future port must
+`grep -rn 'from "@/'` over the copied files explicitly; the closure script will
+not tell you.
+
+### A fifth impurity-register entry, and it is the benign kind
+
+`rollBerryDrops` (game-data.ts) takes an `rng` and merely **defaults** to
+`Math.random`, so any caller needing determinism already has it. That is the
+shape the rule is asking for — the rule simply cannot tell a default apart from
+a hard-coded call.
+
 ## Who's That Pokémon
 
 **Six modes, not two** — the ROADMAP's "both modes" understates it:

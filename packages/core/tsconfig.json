@@ -20,7 +20,10 @@
     "verbatimModuleSyntax": false,
     "skipLibCheck": true,
     "noEmit": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+
+    // trainer-data.generated.ts imports its roster from a .json sibling.
+    "resolveJsonModule": true
   },
   "include": ["src/**/*.ts"]
 }

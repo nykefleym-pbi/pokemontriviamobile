@@ -2,6 +2,7 @@ import { Image, Pressable, Text, View } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { findPokemon, spriteUrl } from "@ptb/core/pokemon-data";
 import { countCaught, DEX_TOTAL } from "../lib/dex";
+import { levelFromTotalXp, rankForLevel, xpProgressInLevel } from "@ptb/core/game-data";
 import { useTrainer } from "../lib/store";
 
 export default function Home() {
@@ -14,7 +15,10 @@ export default function Home() {
   const musicOn = useTrainer((s) => s.musicOn);
   const setMusic = useTrainer((s) => s.setMusicOn);
   const dex = useTrainer((s) => s.dex);
-  const level = useTrainer((s) => s.level);
+  const xp = useTrainer((s) => s.xp);
+  const coins = useTrainer((s) => s.coins);
+  const level = levelFromTotalXp(xp);
+  const progress = xpProgressInLevel(xp);
   const badges = useTrainer((s) => s.badges);
   const reset = useTrainer((s) => s.reset);
 
@@ -63,7 +67,10 @@ export default function Home() {
           <View className="flex-1">
             <Text className="text-xl font-extrabold text-poke-dark">{trainerName}</Text>
             <Text className="text-xs capitalize text-muted-foreground">
-              {sprite} · Level {level} · {badges.length} badges
+              {sprite} · Lv {level} {rankForLevel(level)} · {badges.length} badges
+            </Text>
+            <Text className="text-xs text-muted-foreground">
+              {progress.current}/{progress.need} XP · {coins} coins
             </Text>
             {friendCode && (
               <Text className="text-xs text-muted-foreground">

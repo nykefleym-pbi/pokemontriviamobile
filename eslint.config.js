@@ -129,6 +129,12 @@ export default tseslint.config(
     // If Who's That ever becomes server-authoritative WITH replay, makeRound
     // needs an Rng parameter and this line must go.
     //
+    // `rollBerryDrops` (game-data.ts) is the fifth and the most benign: it
+    // TAKES an rng and merely DEFAULTS to Math.random, so any caller that needs
+    // determinism already can have it. That is the shape the rule is asking
+    // for; the rule just cannot see the difference between a default and a
+    // hard-coded call.
+    //
     // Whichever phase first CALLS one of these must give it an Rng parameter
     // instead, and delete the corresponding line below. Until then this is the
     // register of known impurity — keep it short.
@@ -137,6 +143,7 @@ export default tseslint.config(
       "packages/core/src/lib/trivia-core.ts",
       "packages/core/src/lib/gym-leaders.ts",
       "packages/core/src/lib/whos-that.ts",
+      "packages/core/src/lib/game-data.ts",
     ],
     rules: { "no-restricted-syntax": "off" },
   },

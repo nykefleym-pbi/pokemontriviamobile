@@ -5,6 +5,8 @@ import { applyAnswer, applyRoundStart, type BattleEvent, type BattleState } from
 import { findPokemon, spriteUrl, type PokeEntry } from "@ptb/core/pokemon-data";
 import { findGymLeader } from "@ptb/core/gym-leaders";
 import { getEliteById } from "@ptb/core/elite-four";
+import { battleReward } from "@ptb/core/rewards";
+import { levelFromTotalXp } from "@ptb/core/game-data";
 import {
   buildCfg,
   DEFAULT_PARTNER_ID,
@@ -79,7 +81,8 @@ export default function Battle() {
   const markCaught = useTrainer((s) => s.markCaught);
   const awardBadge = useTrainer((s) => s.awardBadge);
   const awardElite = useTrainer((s) => s.awardElite);
-  const recordWin = useTrainer((s) => s.recordWin);
+  const grantReward = useTrainer((s) => s.grantReward);
+  const xp = useTrainer((s) => s.xp);
   const { gym, elite } = useLocalSearchParams<{ gym?: string; elite?: string }>();
 
   useEffect(() => {
@@ -101,7 +104,7 @@ export default function Battle() {
       const challenger = elite ? getEliteById(elite) : undefined;
       const foeId = leader?.signaturePokemonId ?? challenger?.signaturePokemonId;
       const opponent = foeId ? (findPokemon(foeId) ?? pickOpponent(partner)) : pickOpponent(partner);
-      const mode = challenger ? "elite" : "battle";
+      const mode = challenger ? "elite" : leader ? "weekly" : "battle";
       if (!alive) return;
       setSides({ partner, opponent });
       // Encountering is seeing. Winning is catching — that is the whole loop.
@@ -154,10 +157,24 @@ export default function Battle() {
             : { state: rs.state, events: [] };
 
         if (res.state.phase !== "in_progress") {
-          playBattleResult(res.state.phase === "won");
-          if (res.state.phase === "won") {
+          const won = res.state.phase === "won";
+          playBattleResult(won);
+
+          // The same reward function the web app uses, so a battle here pays
+          // exactly what the same battle pays there. A loss still earns a
+          // little XP in "regular" mode — that is the web behaviour, not an
+          // oversight.
+          grantReward(
+            battleReward({
+              mode: elite ? "elite" : gym ? "weekly" : "regular",
+              won,
+              level: levelFromTotalXp(xp),
+              maxStreak: res.state.maxStreak,
+            }),
+          );
+
+          if (won) {
             if (sides) markCaught(sides.opponent.id);
-            recordWin();
             if (gym) awardBadge(gym);
             if (elite) awardElite(elite);
           }
@@ -179,7 +196,7 @@ export default function Battle() {
         setBusy(false);
       }
     },
-    [set, runtime, busy, done, idx, sides, markCaught, recordWin, awardBadge, awardElite, gym, elite],
+    [set, runtime, busy, done, idx, sides, markCaught, grantReward, xp, awardBadge, awardElite, gym, elite],
   );
 
   const summary = useMemo(() => {
