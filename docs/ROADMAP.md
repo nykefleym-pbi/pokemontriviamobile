@@ -338,10 +338,40 @@ Gate: a debug APK installs and a full solo battle completes on a real device.
 
 Gate: the app installs from the Play internal-testing link on the owner's phone.
 
-> **`ci.yml` is done** and runs all three gates — `npm run typecheck`,
-> `npm run lint`, `npm test` — on every PR and every push to `main`.
-> `android-release.yml` is not built yet and is blocked on the keystore and the
-> Play account.
+> **Status: built, never run.** `ci.yml` runs four gates — typecheck, lint,
+> test, and the Metro bundle — on every PR and push to `main`.
+> `android-release.yml` now exists: tag-triggered, re-runs all four gates, JDK
+> 17, `expo prebuild`, `gradlew bundleRelease` signed from four repository
+> secrets, and uploads the AAB as a workflow artifact. The keystore is decoded
+> to `$RUNNER_TEMP` and deleted in an `always()` step so a failed build cannot
+> leave a signing key in the workspace.
+>
+> `app.json` became **`app.config.ts`** so versioning can come from CI:
+> `versionCode` from the workflow run number (monotonic and unique — Play
+> rejects a repeat, and a hand-maintained integer is what gets forgotten on a
+> release day), `versionName` from the git tag minus its `v`. Verified by
+> resolving the config both ways: no env gives `0.1.0`/`1`, and
+> `ANDROID_VERSION_CODE=42 APP_VERSION=v1.2.3` gives `1.2.3`/`42`.
+>
+> Permissions are declared explicitly: `VIBRATE` (genuinely used now — haptics
+> shipped) and `POST_NOTIFICATIONS` (ahead of push work, so the data-safety form
+> is not revised mid-track). **CAMERA is deliberately absent** until the scanner
+> exists.
+>
+> **Deviation from the plan, deliberately.** The plan says "I generate it, the
+> owner stores the `.jks`". Instead `scripts/generate-upload-keystore.sh` is
+> provided for the owner to run locally. An upload key is a long-lived
+> credential, and anything it passes through keeps a copy — a CI log, an agent
+> transcript, a chat message. Generating it in an ephemeral sandbox and handing
+> it over in conversation puts it somewhere neither party can redact.
+>
+> Uploading to Play is **not** automated: that needs a Google service account
+> with release permissions — a second long-lived credential — and the first
+> builds want a human looking at them. See `docs/RELEASING.md`.
+>
+> The workflow has never executed: it needs the secrets, and its gradle build
+> cannot run in the development sandbox (no Android SDK). The first tag push is
+> the real test.
 
 ## Phase 5+ — Remaining game modes, one release per mode
 

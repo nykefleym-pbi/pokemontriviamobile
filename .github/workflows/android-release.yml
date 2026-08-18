@@ -1,0 +1,94 @@
+name: Android Release
+
+# Tag-triggered, not push-triggered. A release should be a deliberate act with a
+# name attached, and the tag is what supplies `versionName`.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version name to build (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  aab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      # Gradle for Android needs a JDK; 17 is what the Android Gradle Plugin
+      # used by Expo SDK 57 expects.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - run: npm ci
+
+      # Same four gates as ci.yml. A tag must not be able to ship something that
+      # would have failed a pull request.
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+      - name: Resolve version
+        id: v
+        run: |
+          NAME="${{ github.event.inputs.version || github.ref_name }}"
+          echo "name=${NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # `prebuild` generates the native android/ project, which is gitignored —
+      # it is a build product, and keeping it out of the repo means the Expo
+      # config stays the single source of truth for native settings.
+      - name: Prebuild (generate android/)
+        env:
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+          APP_VERSION: ${{ steps.v.outputs.name }}
+        run: npx expo prebuild --platform android --no-install
+
+      # The keystore is stored base64-encoded because GitHub secrets are text.
+      # It is written outside the repo and removed in an always() step, so a
+      # failed build cannot leave a signing key in the workspace.
+      - name: Decode upload keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 is not set. See docs/RELEASING.md."
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+
+      - name: Build signed AAB
+        working-directory: apps/mobile/android
+        env:
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+          APP_VERSION: ${{ steps.v.outputs.name }}
+        run: |
+          ./gradlew bundleRelease \
+            -Pandroid.injected.signing.store.file="$RUNNER_TEMP/upload.jks" \
+            -Pandroid.injected.signing.store.password="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.ANDROID_KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.ANDROID_KEY_PASSWORD }}"
+
+      - name: Remove keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload.jks"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pokemon-trivia-battle-${{ steps.v.outputs.name }}-aab
+          path: apps/mobile/android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 30
