@@ -17,7 +17,9 @@
     "./items": "./src/content/items/index.ts",
     "./rewards": "./src/lib/rewards/index.ts",
     "./game-data": "./src/lib/game-data.ts",
-    "./daily-gift": "./src/lib/daily-gift.ts"
+    "./daily-gift": "./src/lib/daily-gift.ts",
+    "./mega": "./src/engine/mega-replay.ts",
+    "./mega-replay": "./src/engine/mega-battle-replay.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

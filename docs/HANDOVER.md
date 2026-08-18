@@ -487,6 +487,35 @@ whos-that Edge Function bundles, and pulling the full ~195 KB roster in just to
 read id/name/types would make it the largest function in the codebase. Do not
 "tidy" that import.
 
+## Mega raids
+
+The engine is ported (`mega-replay.ts`, `mega-battle-replay.ts`, +2 files, plus
+its test — 91 → 99). A 400 HP boss, 10 damage per correct answer and 20 with X
+Attack armed, so **a clear needs 40 correct answers**; the question set is sized
+to match, or the raid would be unwinnable by construction.
+
+This is the screen where the shop finally matters: potions and X Attack are
+consumed from the inventory. Before it, buying worked and using did not.
+
+`mega-replay.ts` hand-duplicates `MEGA_BOSS_HP` and the damage constants rather
+than importing them from `lib/mega/schedule.ts` — its header explains that
+schedule.ts imports the Supabase client and React hooks, so even a type-only
+import dragged a non-isomorphic module into the Edge Function bundle and broke
+its esbuild step. **Keep the duplicates in sync; do not "fix" them into an
+import.**
+
+## Server authority: the gap solo and Mega share
+
+Neither solo battles nor Mega raids are server-authoritative yet. Both resolve
+in the client and write nothing the server checks. The ROADMAP's Phase 2 design
+is that a Deno Edge Function importing `packages/core` resolves turns and SQL
+only persists — that function does not exist.
+
+What that means concretely: `solo_battles` is never written, and a player could
+report any result. The engine is already replay-shaped for it (`replayBattle`,
+`applyNextAction`, `replayMegaLog` all take `(seed, log)`), so the work is the
+Edge Function and its wiring, not a redesign.
+
 ## Gyms and the Elite Four
 
 43 gym leaders across 5 regions and 21 Elite Four challengers, both driving the

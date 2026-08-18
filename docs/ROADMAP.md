@@ -397,8 +397,13 @@ In dependency order, each ending in a new internal-testing build:
    and the 7-day daily gift with its miss-forgiveness and welcome-back purse.
    **Not built:** consuming items in battle (there is no bag UI), and
    **achievements** — see below for why those are not a port.
-5. **Mega raids** — needs `mega_*` tables and the `mega-run` / `mega-reward-claim`
-   Edge Functions ported.
+5. **Mega raids** — 🟡 **client done**: the engine (`mega-replay.ts`,
+   `mega-battle-replay.ts`) is ported with its test, and the raid screen plays
+   — 400 HP boss, 40 correct answers to clear, potions and X Attack consumed
+   from the inventory. **Not done:** the `mega_*` tables and the
+   `mega-run` / `mega-reward-claim` Edge Functions, i.e. it is not
+   server-authoritative. That is the same gap solo battles have; see
+   *Server authority* in the handover.
 6. **PvP** — the largest slice by far: live matches, queue, chat, moderation,
    signature abilities, weather, the bot. Re-architected per Phase 2 so turn
    resolution lives only in `packages/core`.
@@ -407,6 +412,10 @@ In dependency order, each ending in a new internal-testing build:
 8. **Social** — friends, referrals, share cards (`expo-sharing` + `react-native-view-shot`
    in place of the canvas-based `share-card-builder.ts`).
 
+> Item 5's widening was also trivial — the two Mega engine files pull in
+> nothing new. Only the `pvp-live-*` modules genuinely reach `../lib/store`, so
+> the *Phase 1 boundary* caution now applies to item 6 alone.
+>
 > Item 2's widening is **done and was far smaller than feared**: `gym-leaders.ts`
 > and `elite-four.ts` pull in *nothing* new — the closure went 73 → 75 source
 > files (77 → 79 with tests), with zero bare imports and no `../lib/store`

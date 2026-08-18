@@ -134,6 +134,13 @@ export default function Home() {
         </View>
 
         <Pressable
+          onPress={() => router.push("/mega")}
+          className="rounded-card border border-border bg-card px-6 py-3 active:opacity-80"
+        >
+          <Text className="text-center text-base font-bold text-poke-dark">Mega Raid</Text>
+        </Pressable>
+
+        <Pressable
           onPress={() => router.push("/whos-that")}
           className="rounded-card border border-border bg-card px-6 py-3 active:opacity-80"
         >

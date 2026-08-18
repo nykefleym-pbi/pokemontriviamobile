@@ -34,6 +34,7 @@ export default function RootLayout() {
         <Stack.Screen name="create" options={{ title: "New Trainer" }} />
         <Stack.Screen name="partner" options={{ title: "Your Partner" }} />
         <Stack.Screen name="battle" options={{ title: "Solo Battle" }} />
+        <Stack.Screen name="mega" options={{ title: "Mega Raid" }} />
         <Stack.Screen name="shop" options={{ title: "Shop" }} />
         <Stack.Screen name="whos-that" options={{ title: "Who's That Pokémon?" }} />
         <Stack.Screen name="gyms" options={{ title: "Gym Leaders" }} />
