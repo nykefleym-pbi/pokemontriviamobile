@@ -347,6 +347,38 @@ The web app's tokens are `oklch`, which React Native cannot parse. They were
 converted to sRGB hex and live in `tailwind.config.js` — `#ee343b` poké-red,
 `#f9c718` yellow, `#0076d2` blue, `#0f1b2d` dark.
 
+## The Pokédex
+
+1,025 entries from `packages/core`, with search by name or number, a detail
+screen, and seen/caught state persisted in the save.
+
+**`ALL_POKEMON` is not the dex list.** It also carries synthetic forme entries
+with ids far above the real range (Calyrex's rider formes at 10194 and
+friends). Those exist for battle maths, not for a Pokédex, so `DEX_ENTRIES`
+stops at 1025. Rendering `ALL_POKEMON` directly would put nonsense in the grid.
+
+Seen/caught is deliberately explicit here (`"seen" | "caught"`), unlike the web
+app's `caught !== false`. That oddity is a **migration artefact**: its `caught`
+key was added after players already had saves, and a truthy test would have
+silently demoted every existing Pokédex to "seen". This app started fresh so it
+does not inherit the hazard — but do not "simplify" the web one to match.
+
+Dex keys are **strings**, because the save is serialised to JSON and numeric
+object keys only survive a round trip by luck of ordering.
+
+The grid is a windowed `FlatList` (`initialNumToRender`/`maxToRenderPerBatch`
+24, `windowSize` 7, `removeClippedSubviews`). At 1,025 entries an unwindowed
+list drops frames badly on a mid-range phone. Unseen entries are silhouetted
+with `tintColor` rather than a second asset, and sized as a share of their tile
+so they are never cropped — the same rule the partner grid follows.
+
+`profiles.pokedex_count` is mirrored from the save on sync. It is **derived**,
+not a second source of truth: if the two disagree, the save is right. It is also
+**client-reported** — a player could claim 1,025 — which is inherent to a
+client-authoritative collection, exactly as in the web app. Making it
+server-authoritative would mean the server tracking every catch, which is a
+different design, not a bug fix.
+
 ## Releasing
 
 `docs/RELEASING.md` is the procedure. The short version:

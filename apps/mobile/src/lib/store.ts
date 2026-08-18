@@ -48,6 +48,17 @@ interface TrainerState {
   friendCode: string | null;
   musicOn: boolean;
   setMusicOn: (on: boolean) => void;
+  /** Pokédex progress, keyed by id as a STRING because this is serialised to
+   *  JSON — numeric object keys survive a round trip only by luck of ordering.
+   *
+   *  The web app models this as `caught !== false` rather than a truthy test,
+   *  because its `caught` key was added after players already had saves and a
+   *  truthy check would have silently demoted every existing Pokédex to "seen".
+   *  This app starts fresh, so the states are explicit and that hazard does not
+   *  apply — but do not "simplify" the web one to match. */
+  dex: Record<string, "seen" | "caught">;
+  markSeen: (id: number) => void;
+  markCaught: (id: number) => void;
   setTrainer: (name: string, sprite: TrainerSprite) => void;
   setPartner: (id: number) => void;
   reset: () => void;
@@ -63,10 +74,18 @@ export const useTrainer = create<TrainerState>()(
       userId: null,
       friendCode: null,
       musicOn: true,
+      dex: {},
       setTrainer: (trainerName, sprite) => set({ trainerName: trainerName.trim(), sprite }),
       setPartner: (partnerId) => set({ partnerId }),
       setMusicOn: (musicOn) => set({ musicOn }),
-      reset: () => set({ trainerName: null, sprite: "red", partnerId: null }),
+      markSeen: (id) =>
+        set((s) => {
+          // Never downgrade a catch to a sighting.
+          if (s.dex[String(id)]) return s;
+          return { dex: { ...s.dex, [String(id)]: "seen" } };
+        }),
+      markCaught: (id) => set((s) => ({ dex: { ...s.dex, [String(id)]: "caught" } })),
+      reset: () => set({ trainerName: null, sprite: "red", partnerId: null, dex: {} }),
     }),
     {
       name: "trainer",
@@ -79,6 +98,7 @@ export const useTrainer = create<TrainerState>()(
         sprite: s.sprite,
         partnerId: s.partnerId,
         musicOn: s.musicOn,
+        dex: s.dex,
       }),
       // Nothing should render a "create your trainer" prompt before the store
       // has actually read from disk, or a returning player sees onboarding for

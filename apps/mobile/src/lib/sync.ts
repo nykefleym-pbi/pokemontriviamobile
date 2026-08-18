@@ -9,6 +9,7 @@ export interface SavePayload {
   trainerName: string | null;
   sprite: string;
   partnerId: number | null;
+  dex: Record<string, "seen" | "caught">;
 }
 
 export interface RemoteSave {
@@ -62,6 +63,19 @@ export async function claimTrainer(
   if (!error) return { ok: true };
   if (error.code === "23505") return { ok: false, reason: "taken" };
   return { ok: false, reason: "offline" };
+}
+
+/** Mirrors the caught count onto the public profile.
+ *
+ *  `profiles` is publicly readable, so this is the number other trainers see.
+ *  It is derived from `saves.state.dex` rather than being a second source of
+ *  truth — if the two ever disagree, the save is right and this is stale. */
+export async function pushPokedexCount(userId: string, caught: number): Promise<boolean> {
+  const { error } = await supabase
+    .from("profiles")
+    .update({ pokedex_count: caught })
+    .eq("id", userId);
+  return !error;
 }
 
 export async function fetchFriendCode(): Promise<string | null> {

@@ -1,10 +1,23 @@
 import { useEffect } from "react";
 import { ensureSession } from "./session";
-import { fetchFriendCode, pullSave, pushSave, SAVE_VERSION, type SavePayload } from "./sync";
+import {
+  fetchFriendCode,
+  pullSave,
+  pushPokedexCount,
+  pushSave,
+  SAVE_VERSION,
+  type SavePayload,
+} from "./sync";
+import { countCaught } from "./dex";
 import { useTrainer } from "./store";
 
 function payloadOf(s: ReturnType<typeof useTrainer.getState>): SavePayload {
-  return { trainerName: s.trainerName, sprite: s.sprite, partnerId: s.partnerId };
+  return {
+    trainerName: s.trainerName,
+    sprite: s.sprite,
+    partnerId: s.partnerId,
+    dex: s.dex,
+  };
 }
 
 /** Signs in, reconciles the local save with the server's, then keeps the
@@ -37,9 +50,11 @@ export function useBootSync() {
           trainerName: remote.state.trainerName,
           sprite: remote.state.sprite as typeof local.sprite,
           partnerId: remote.state.partnerId,
+          dex: remote.state.dex ?? {},
         });
       } else if (local.trainerName) {
         await pushSave(userId, payloadOf(local));
+        await pushPokedexCount(userId, countCaught(local.dex));
       }
 
       const code = await fetchFriendCode();
@@ -60,13 +75,17 @@ export function useBootSync() {
       if (
         s.trainerName === prev.trainerName &&
         s.sprite === prev.sprite &&
-        s.partnerId === prev.partnerId
+        s.partnerId === prev.partnerId &&
+        s.dex === prev.dex
       ) {
         return;
       }
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        void pushSave(s.userId!, payloadOf(s));
+        const uid = s.userId;
+        if (!uid) return;
+        void pushSave(uid, payloadOf(s));
+        void pushPokedexCount(uid, countCaught(s.dex));
       }, 1200);
     });
     return () => {
