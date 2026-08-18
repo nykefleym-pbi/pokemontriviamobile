@@ -16,7 +16,8 @@
     "./whos-that": "./src/lib/whos-that.ts",
     "./items": "./src/content/items/index.ts",
     "./rewards": "./src/lib/rewards/index.ts",
-    "./game-data": "./src/lib/game-data.ts"
+    "./game-data": "./src/lib/game-data.ts",
+    "./daily-gift": "./src/lib/daily-gift.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -71,6 +71,15 @@ interface TrainerState {
   coins: number;
   /** Training points — the currency the lifetime-TP damage multiplier reads. */
   tp: number;
+  /** item id -> count held. */
+  inventory: Record<string, number>;
+  /** Daily-gift cadence state. The ARITHMETIC lives in packages/core's
+   *  planDailyGift; this only stores what that function needs as input. */
+  giftLastClaim: string | null;
+  giftStreak: number;
+  giftFreezeUsed: string | null;
+  buyItem: (id: string, cost: number) => boolean;
+  claimGift: (today: string, day: number, usedFreeze: boolean, coins: number) => void;
   awardBadge: (gymId: string) => void;
   awardElite: (eliteId: string) => void;
   grantReward: (r: { xp: number; coins?: number; tp?: number }) => void;
@@ -95,6 +104,10 @@ export const useTrainer = create<TrainerState>()(
       xp: 0,
       coins: 0,
       tp: 0,
+      inventory: {},
+      giftLastClaim: null,
+      giftStreak: 0,
+      giftFreezeUsed: null,
       setTrainer: (trainerName, sprite) => set({ trainerName: trainerName.trim(), sprite }),
       setPartner: (partnerId) => set({ partnerId }),
       setMusicOn: (musicOn) => set({ musicOn }),
@@ -111,6 +124,22 @@ export const useTrainer = create<TrainerState>()(
         set((s) =>
           s.eliteDefeated.includes(eliteId) ? s : { eliteDefeated: [...s.eliteDefeated, eliteId] },
         ),
+      buyItem: (id, cost) => {
+        const s = useTrainer.getState();
+        if (s.coins < cost) return false;
+        useTrainer.setState({
+          coins: s.coins - cost,
+          inventory: { ...s.inventory, [id]: (s.inventory[id] ?? 0) + 1 },
+        });
+        return true;
+      },
+      claimGift: (today, day, usedFreeze, coins) =>
+        set((s) => ({
+          giftLastClaim: today,
+          giftStreak: day,
+          giftFreezeUsed: usedFreeze ? today : s.giftFreezeUsed,
+          coins: s.coins + coins,
+        })),
       grantReward: ({ xp, coins = 0, tp = 0 }) =>
         set((s) => ({ xp: s.xp + xp, coins: s.coins + coins, tp: s.tp + tp })),
       reset: () =>
@@ -124,6 +153,10 @@ export const useTrainer = create<TrainerState>()(
           xp: 0,
           coins: 0,
           tp: 0,
+          inventory: {},
+          giftLastClaim: null,
+          giftStreak: 0,
+          giftFreezeUsed: null,
         }),
     }),
     {
@@ -143,6 +176,10 @@ export const useTrainer = create<TrainerState>()(
         xp: s.xp,
         coins: s.coins,
         tp: s.tp,
+        inventory: s.inventory,
+        giftLastClaim: s.giftLastClaim,
+        giftStreak: s.giftStreak,
+        giftFreezeUsed: s.giftFreezeUsed,
       }),
       // Nothing should render a "create your trainer" prompt before the store
       // has actually read from disk, or a returning player sees onboarding for
