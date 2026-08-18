@@ -17,9 +17,10 @@ export interface ServedQuestion {
   type_theme: string | null;
 }
 
-/** Offline last resort, and what the app plays with until anonymous sign-in is
- *  enabled (the RPCs are granted to `authenticated`, not `anon`). These carry
- *  their own answers because there is no server in the loop to ask. */
+/** Offline last resort. The game RPCs are granted to `authenticated`, so these
+ *  are what a device plays with before the anonymous sign-in lands or while it
+ *  has no connection. They carry their own answers because there is no server
+ *  in the loop to ask. */
 export const FALLBACK_QUESTIONS: Trivia[] = [
   {
     question: "Which type is super effective against Water?",

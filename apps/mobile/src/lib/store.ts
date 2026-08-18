@@ -39,7 +39,13 @@ interface TrainerState {
   trainerName: string | null;
   sprite: TrainerSprite;
   partnerId: number | null;
+  /** True once the store has read from disk. Nothing should render onboarding
+   *  before this, or a returning player sees it for a frame on every launch. */
   hydrated: boolean;
+  /** Anonymous auth user id, once signed in. Null means playing locally. */
+  userId: string | null;
+  /** Server-allocated, never invented here — see migration 0001. */
+  friendCode: string | null;
   setTrainer: (name: string, sprite: TrainerSprite) => void;
   setPartner: (id: number) => void;
   reset: () => void;
@@ -52,6 +58,8 @@ export const useTrainer = create<TrainerState>()(
       sprite: "red",
       partnerId: null,
       hydrated: false,
+      userId: null,
+      friendCode: null,
       setTrainer: (trainerName, sprite) => set({ trainerName: trainerName.trim(), sprite }),
       setPartner: (partnerId) => set({ partnerId }),
       reset: () => set({ trainerName: null, sprite: "red", partnerId: null }),
@@ -59,6 +67,9 @@ export const useTrainer = create<TrainerState>()(
     {
       name: "trainer",
       storage,
+      // userId and friendCode are deliberately NOT persisted: the session is
+      // the source of truth for one and the server for the other, and a stale
+      // copy of either would be worse than re-fetching.
       partialize: (s) => ({
         trainerName: s.trainerName,
         sprite: s.sprite,

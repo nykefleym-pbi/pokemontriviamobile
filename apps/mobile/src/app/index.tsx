@@ -9,6 +9,7 @@ export default function Home() {
   const trainerName = useTrainer((s) => s.trainerName);
   const sprite = useTrainer((s) => s.sprite);
   const partnerId = useTrainer((s) => s.partnerId);
+  const friendCode = useTrainer((s) => s.friendCode);
   const reset = useTrainer((s) => s.reset);
 
   // Rendering onboarding before the store has read from disk would flash a
@@ -56,6 +57,11 @@ export default function Home() {
           <View className="flex-1">
             <Text className="text-xl font-extrabold text-poke-dark">{trainerName}</Text>
             <Text className="text-xs capitalize text-muted-foreground">{sprite} · Level 5</Text>
+            {friendCode && (
+              <Text className="text-xs text-muted-foreground">
+                Friend code <Text className="font-bold text-poke-dark">{friendCode}</Text>
+              </Text>
+            )}
           </View>
           {partner && (
             <Image
