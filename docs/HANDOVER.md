@@ -634,3 +634,63 @@ keystore** (generated here, stored by the owner as repo secrets, never committed
 The web app (`nykefleym-pbi/pokemontrivia`) is unmodified — the port only read
 from it. Nothing in this repo deploys anywhere yet, so there is no production
 build to confirm.
+
+## Edge Functions: the build, deploy and verify loop
+
+`supabase/functions/battle-solo/index.ts` is NOT what gets deployed. Deno cannot
+resolve its relative imports into `packages/core` without the whole repo on the
+deploy target, and Supabase's deploy API takes a flat file list rather than a
+directory. The loop is:
+
+```
+npm run bundle:edge -- battle-solo     # esbuild -> .bundle.ts (gitignored)
+# deploy the BUNDLE, never index.ts
+```
+
+Never hand-edit a bundle. Edit `index.ts` and re-bundle.
+
+### Typechecking
+
+`supabase/functions/**` was in no tsconfig at all, which is precisely the hole
+the web repo's CLAUDE.md records for `scripts/` — where a stale string
+comparison compiled fine and silently un-wired 103 of 104 abilities. Shipping
+the AUTHORITATIVE battle implementation unchecked is the worst place in this
+repo to repeat it, so `supabase/functions/tsconfig.json` now covers it and
+`npm run typecheck` runs it. Two obstacles are handled rather than papered over:
+
+- `Deno` is not a Node or DOM global, so `supabase/functions/deno.d.ts` declares
+  the exact surface used. A function that reaches for more of Deno has to grow
+  that file first.
+- `npm:@supabase/supabase-js@2.45.4` is a Deno-style specifier, so `paths` maps
+  it onto the real package already installed for the app. The client is checked
+  against its ACTUAL types, not an `any` stub.
+
+Confirm the config bites rather than passing vacuously — a tsconfig that
+resolves nothing is green for the wrong reason. Drop a throwaway file into
+`supabase/functions/` with a deliberate error of each kind (an unknown method on
+a `db.from(...)` builder, a wrong engine type, `Deno.env.get` assigned to a
+number) and check all three are reported.
+
+### Verifying a deploy from this sandbox
+
+The sandbox proxy 403s `supabase.co`, and curl reports that as HTTP 000, which
+reads like a dead site. It is not. Drive the HTTP **from inside the database**
+instead, which also makes the test a real one rather than a hash comparison:
+
+1. `create extension if not exists pg_net;`
+2. `POST /auth/v1/signup` with `{"data":{}}` and the anon key — anonymous
+   sign-in is on, so this returns a genuine user JWT.
+3. `POST /functions/v1/battle-solo` with that JWT, reading responses back out of
+   `net._http_response`.
+
+Worth exercising, because each has caught or could catch something real: the
+happy path, cross-user isolation (a second anonymous user must get 404 on both
+`get` AND `submit_action` — service role bypasses RLS, so only the explicit
+`user_id` filter protects the row), out-of-sequence and post-end actions (409),
+duplicate and unknown question ids (400), and that the stored `cfg` contains no
+answer key.
+
+**Put the database back afterwards.** Drop the probe functions and tables, delete
+the anonymous users, reset any `curated_questions` counters the probe moved
+(`grade_trivia_answer` bumps `times_served`/`times_correct`), and drop `pg_net` —
+it is not in any migration, so leaving it installed is schema drift.

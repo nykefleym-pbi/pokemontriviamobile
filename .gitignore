@@ -6,3 +6,6 @@ build/
 .env
 .env.local
 .DS_Store
+
+# Edge Function build artifacts — regenerate with npm run bundle:edge
+supabase/functions/**/.bundle.ts

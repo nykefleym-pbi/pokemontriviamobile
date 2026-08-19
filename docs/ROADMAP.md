@@ -1,13 +1,15 @@
 # Pokémon Trivia Battle — native Android app (Expo) for Google Play
 
-> **Status (2026-08-18).** This is the owner's approved plan, reproduced as the
+> **Status (2026-08-19).** This is the owner's approved plan, reproduced as the
 > source of truth. Phase status and the few points where the shipped code
 > deviates are marked inline in `> quoted` blocks like this one. Everything not
 > so marked is the plan as approved.
 >
 > - **Phase 1 — partially done.** `packages/core` exists and is green, but with a
 >   deliberately narrower scope than this plan specifies. See *Phase 1 boundary*.
-> - **Phase 2 — done.** Seven migrations applied to `dpmnugfbawebozwihmer`.
+> - **Phase 2 — done.** Nine migrations applied to `dpmnugfbawebozwihmer`, and
+>   the `battle-solo` Edge Function is deployed and wired to the battle screen,
+>   which is the phase's "resolve turns in one place" requirement.
 > - **Phase 3 — scaffolded, not finished.** `apps/mobile` builds, bundles and
 >   plays a solo battle; most of the phase's screens are still missing and the
 >   on-device gate has not been met.
@@ -171,10 +173,43 @@ minimum that supports Phase 3's vertical slice, then grow per phase.
   a Deno Edge Function importing `packages/core` — and let SQL only persist. This is
   the single biggest correctness win available from starting over.
 
+> **Status: the `battle-solo` Edge Function is live** (project
+> `dpmnugfbawebozwihmer`, version 2, `verify_jwt` on), and the battle screen
+> calls it whenever its questions came from the server. Turns now resolve in
+> exactly one place: the function replays the whole action log through
+> `packages/core` and derives the next state itself. SQL only persists.
+>
+> One thing had to be designed differently from the web app's function of the
+> same name, and it is worth knowing why. The web version embeds the whole
+> question set — answers included — in `solo_battles.cfg`, reasoning that the
+> client already holds the questions in order to display them. On this project
+> that is false ON PURPOSE: `curated_questions` has RLS on with no policies,
+> `get_trivia_questions` projects `correct_index` away, and grading is a server
+> call. A device here physically cannot supply that cfg. So the client sends
+> ORDERED QUESTION IDS (`SoloBattleCfgRef`) and the server resolves them — the
+> same shape `daily_questions` uses, for the same reason. The ids are also what
+> is STORED: `solo_battles` has a select policy for its owner, so a hydrated cfg
+> in that column would hand the answer key back to the player it is being kept
+> from. Verified against the deployed function: the stored `cfg` has no
+> `questions` key and the substring `correct` appears nowhere in it.
+>
+> Duplicate question ids are rejected, which is an anti-cheat rule rather than a
+> shape rule — every answer's reveal names the correct option, so `[X,X,X,X]`
+> would let a player miss once and then be right forever.
+>
+> Offline battles are unchanged and still resolve on the device: without a
+> server there is no authority to have, and the bundled questions carry their
+> own answers. A failed `start` falls back to that path rather than blocking
+> play.
+>
+> **Not yet server-authoritative:** Mega raids, and the reward/XP grants, which
+> are still written by the client into local state after the server returns the
+> outcome.
+
 Gate: schema applied, RLS verified by an authenticated and an unauthenticated
 `execute_sql` probe.
 
-> **Status: done.** Seven migrations applied and checked in:
+> **Status: done.** Nine migrations applied and checked in:
 >
 > | Version | Name |
 > | --- | --- |

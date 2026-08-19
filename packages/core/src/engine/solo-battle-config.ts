@@ -27,9 +27,11 @@ import type { BattleConfig, BattleItemConfig } from "./turn";
 
 export type SoloBattleMode = "battle" | "elite" | "weekly";
 
-/** The frozen, raw configuration a solo battle is started and replayed with.
- *  `questions[i].correct` is the one place the server holds the answer key —
- *  see 02-architecture.md P3 / the "embed the question set at start" call.
+/** The frozen, raw configuration a solo battle is replayed with — the
+ *  SERVER-side shape. `questions[i].correct` is the answer key, so this is
+ *  built inside the Edge Function by resolving a SoloBattleCfgRef's
+ *  `questionIds` against `curated_questions`; it is never sent over the wire
+ *  in either direction and never stored. See SoloBattleCfgRef below.
  *
  *  `items` carries the same trust tier as ability/level/types: claimed by
  *  the authenticated client from its own inventory/weekly-cooldown state at
@@ -48,6 +50,35 @@ export interface SoloBattleCfg {
   enemyTypes: PokeType[];
   trainingPoints: number;
   items: BattleItemConfig;
+}
+
+/** Everything `resolveBattleSetup` needs, which is everything EXCEPT the
+ *  question set: matchup math, the HP curve and the item budget never read
+ *  `questions`. Splitting it out lets a caller that legitimately does not
+ *  hold the answer key still derive the same BattleConfig the server replays
+ *  with. */
+export type SoloBattleSetupInput = Omit<SoloBattleCfg, "questions">;
+
+/** What a CLIENT is allowed to start a battle with ON THIS PROJECT.
+ *
+ *  The web app embeds the whole question set -- answers included -- in
+ *  `solo_battles.cfg` at start, on the reasoning that the client already has
+ *  the questions loaded to display them. Here it deliberately does not:
+ *  `curated_questions` has RLS on with no policies at all,
+ *  `get_trivia_questions` projects `correct_index` away, and grading is a
+ *  server round-trip (`grade_trivia_answer`). A device physically cannot
+ *  supply a `SoloBattleCfg`, and making it able to would hand back the exact
+ *  thing migration 0002 was written to withhold.
+ *
+ *  So the client names its questions by id and the server resolves them --
+ *  the same ordered-ids shape `daily_questions` uses for the same reason.
+ *
+ *  The REF is also what gets stored, not the hydrated set: `solo_battles` has
+ *  a select policy for its owner, so an answer key written into `cfg` would
+ *  be readable by the very player it is being kept from. The server rehydrates
+ *  from `curated_questions` on each action instead. */
+export interface SoloBattleCfgRef extends SoloBattleSetupInput {
+  questionIds: string[];
 }
 
 export interface ResolvedBattleSetup {
@@ -69,7 +100,7 @@ export interface ResolvedBattleSetup {
 }
 
 /** Pure, deterministic: same `cfg` always resolves to the same setup. */
-export function resolveBattleSetup(cfg: SoloBattleCfg): ResolvedBattleSetup {
+export function resolveBattleSetup(cfg: SoloBattleSetupInput): ResolvedBattleSetup {
   const player = { types: cfg.playerTypes };
   const enemy = { types: cfg.enemyTypes };
 
@@ -124,10 +155,28 @@ function isValidItemConfig(items: unknown): items is BattleItemConfig {
   return ITEM_CONFIG_BOOL_FIELDS.every((key) => typeof i[key] === "boolean");
 }
 
-/** Shared shape validator for a client-submitted `SoloBattleCfg` — used by
- *  both battle-solo (validating `start`'s cfg and a fetched row's cfg) and
- *  save-sync (validating a queued offline battle's cfg before replaying it),
- *  so the two Edge Functions never drift on what counts as well-formed. */
+/** The half of the shape both cfg forms have in common. */
+function isValidSetupInput(c: Record<string, unknown>): boolean {
+  return (
+    typeof c.playerPokemonId === "number" &&
+    Array.isArray(c.playerTypes) &&
+    c.playerTypes.length > 0 &&
+    c.playerTypes.every((t) => typeof t === "string") &&
+    (c.abilityId === null || typeof c.abilityId === "string") &&
+    typeof c.level === "number" &&
+    (c.mode === "battle" || c.mode === "elite" || c.mode === "weekly") &&
+    typeof c.enemyPokemonId === "number" &&
+    Array.isArray(c.enemyTypes) &&
+    c.enemyTypes.length > 0 &&
+    c.enemyTypes.every((t) => typeof t === "string") &&
+    typeof c.trainingPoints === "number" &&
+    isValidItemConfig(c.items)
+  );
+}
+
+/** Validates a HYDRATED cfg -- the server-side shape, answers included. What
+ *  battle-solo builds after resolving `questionIds`, and what replayBattle
+ *  takes. A client never produces one of these; see SoloBattleCfgRef. */
 export function isValidSoloBattleCfg(cfg: unknown): cfg is SoloBattleCfg {
   if (!cfg || typeof cfg !== "object") return false;
   const c = cfg as Record<string, unknown>;
@@ -145,18 +194,37 @@ export function isValidSoloBattleCfg(cfg: unknown): cfg is SoloBattleCfg {
         typeof qq.category === "string"
       );
     }) &&
-    typeof c.playerPokemonId === "number" &&
-    Array.isArray(c.playerTypes) &&
-    c.playerTypes.length > 0 &&
-    c.playerTypes.every((t) => typeof t === "string") &&
-    (c.abilityId === null || typeof c.abilityId === "string") &&
-    typeof c.level === "number" &&
-    (c.mode === "battle" || c.mode === "elite" || c.mode === "weekly") &&
-    typeof c.enemyPokemonId === "number" &&
-    Array.isArray(c.enemyTypes) &&
-    c.enemyTypes.length > 0 &&
-    c.enemyTypes.every((t) => typeof t === "string") &&
-    typeof c.trainingPoints === "number" &&
-    isValidItemConfig(c.items)
+    isValidSetupInput(c)
+  );
+}
+
+/** The same ceiling `get_trivia_questions` enforces on a single fetch. A cfg
+ *  is client-supplied, so without a cap one request could name an unbounded
+ *  number of ids and make every replay of that battle proportionally
+ *  expensive. */
+export const MAX_QUESTIONS_PER_BATTLE = 50;
+
+/** Validates the cfg a client may submit, and the cfg as stored in
+ *  `solo_battles.cfg`.
+ *
+ *  DUPLICATE IDS ARE REJECTED, and that is a rule about cheating rather than
+ *  about shape. Every answer's reveal tells the player the correct option, so
+ *  a set of `[X, X, X, X, X, X]` would let them miss the first question and
+ *  then answer the same question right five times. The client picks its own
+ *  questions (`get_trivia_questions` returns a random set), so the server
+ *  cannot vet WHICH questions -- but it can insist they be distinct. Used by battle-solo on both `start` (trusting nothing
+ *  from the wire) and `submit_action` (trusting nothing from the row either,
+ *  since a malformed row would otherwise reach the engine). */
+export function isValidSoloBattleCfgRef(cfg: unknown): cfg is SoloBattleCfgRef {
+  if (!cfg || typeof cfg !== "object") return false;
+  const c = cfg as Record<string, unknown>;
+  if (!Array.isArray(c.questionIds)) return false;
+  const ids = c.questionIds;
+  return (
+    ids.length > 0 &&
+    ids.length <= MAX_QUESTIONS_PER_BATTLE &&
+    ids.every((id) => typeof id === "string" && id.length > 0) &&
+    new Set(ids).size === ids.length &&
+    isValidSetupInput(c)
   );
 }

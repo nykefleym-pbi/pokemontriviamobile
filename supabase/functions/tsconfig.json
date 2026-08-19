@@ -1,0 +1,40 @@
+{
+  // Edge Functions were previously in NO tsconfig at all -- the same hole the
+  // web project's CLAUDE.md records for `scripts/`, where a stale string
+  // comparison compiled fine and silently un-wired 103 of 104 abilities.
+  // battle-solo is the AUTHORITATIVE battle implementation; shipping it
+  // unchecked is the worst place in the repo to have that hole.
+  //
+  // Two things stand between Deno source and `tsc`, and each is handled rather
+  // than worked around:
+  //
+  //   1. `Deno` is not a Node/DOM global    -> deno.d.ts declares what is used.
+  //   2. `npm:@supabase/supabase-js@2.45.4` -> `paths` maps the Deno-style
+  //      specifier onto the real package already installed for the app, so the
+  //      client is checked against its ACTUAL types rather than an `any` stub.
+  //
+  // `lib` includes DOM for the web-standard globals Deno implements (Request,
+  // Response, Headers, crypto). That also declares `window`/`document`/
+  // `localStorage`, which have no meaning server-side -- eslint bans those
+  // three under supabase/functions/** to close the gap this opens.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM"],
+    "types": [],
+
+    "strict": true,
+    "noFallthroughCasesInSwitch": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+
+    "baseUrl": ".",
+    "paths": {
+      "npm:@supabase/supabase-js@*": ["../../node_modules/@supabase/supabase-js"]
+    }
+  },
+  "include": ["**/*.ts", "../../packages/core/src/**/*.ts"],
+  "exclude": ["**/.bundle.ts"]
+}
