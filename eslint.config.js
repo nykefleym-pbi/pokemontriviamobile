@@ -42,6 +42,14 @@ export default tseslint.config(
   },
 
   {
+    // Repo tooling: plain Node ESM, run by `node`, never bundled into the app.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { process: "readonly", console: "readonly", __dirname: "readonly" },
+    },
+  },
+
+  {
     // packages/core is the isomorphic battle engine: the same files run in the
     // Expo app (optimistic preview) and in Edge Functions (authority). Nothing
     // in here may touch UI, the network, or ambient randomness/time.
@@ -146,5 +154,33 @@ export default tseslint.config(
       "packages/core/src/lib/game-data.ts",
     ],
     rules: { "no-restricted-syntax": "off" },
+  },
+
+  {
+    // Edge Functions run in Deno, where there is no browser. Their tsconfig
+    // has to include the DOM lib to get the web-standard globals Deno DOES
+    // implement (Request, Response, Headers, crypto), and that unavoidably
+    // declares three that it does not. Typing `localStorage` in a function
+    // would compile and then fail at runtime for every player; ban them here
+    // instead, since the type checker structurally cannot.
+    files: ["supabase/functions/**/*.ts"],
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        { name: "window", message: "Edge Functions run in Deno; there is no window." },
+        { name: "document", message: "Edge Functions run in Deno; there is no document." },
+        {
+          name: "localStorage",
+          message: "Edge Functions run in Deno; persist to Postgres instead.",
+        },
+      ],
+    },
+  },
+
+  {
+    // The bundler's output, not source. It is gitignored, but a working tree
+    // that has run `npm run bundle:edge` still has it on disk, and linting
+    // minified engine code produces nothing but noise.
+    ignores: ["supabase/functions/**/.bundle.ts"],
   },
 );

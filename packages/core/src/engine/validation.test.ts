@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isValidSoloBattleCfg } from "./solo-battle-config";
+import {
+  isValidSoloBattleCfg,
+  isValidSoloBattleCfgRef,
+  MAX_QUESTIONS_PER_BATTLE,
+} from "./solo-battle-config";
 import { isValidBattleAction } from "./turn";
-import type { SoloBattleCfg } from "./solo-battle-config";
+import type { SoloBattleCfg, SoloBattleCfgRef } from "./solo-battle-config";
 
 const VALID_ITEMS = {
   assaultVestActive: false,
@@ -28,6 +32,61 @@ function validCfg(): SoloBattleCfg {
     items: VALID_ITEMS,
   };
 }
+
+function validRef(): SoloBattleCfgRef {
+  const { questions: _questions, ...rest } = validCfg();
+  return { ...rest, questionIds: ["11111111-1111-1111-1111-111111111111"] };
+}
+
+describe("isValidSoloBattleCfgRef", () => {
+  it("accepts a well-formed ref", () => {
+    expect(isValidSoloBattleCfgRef(validRef())).toBe(true);
+  });
+
+  it("rejects non-objects", () => {
+    expect(isValidSoloBattleCfgRef(null)).toBe(false);
+    expect(isValidSoloBattleCfgRef("cfg")).toBe(false);
+  });
+
+  it("rejects a hydrated cfg, which must never come off the wire", () => {
+    expect(isValidSoloBattleCfgRef(validCfg())).toBe(false);
+  });
+
+  it("rejects an empty or non-array questionIds", () => {
+    expect(isValidSoloBattleCfgRef({ ...validRef(), questionIds: [] })).toBe(false);
+    expect(isValidSoloBattleCfgRef({ ...validRef(), questionIds: "abc" })).toBe(false);
+  });
+
+  it("rejects non-string and empty ids", () => {
+    expect(isValidSoloBattleCfgRef({ ...validRef(), questionIds: [1, 2] })).toBe(false);
+    expect(isValidSoloBattleCfgRef({ ...validRef(), questionIds: [""] })).toBe(false);
+  });
+
+  // Not a shape rule: every answer's reveal names the correct option, so a
+  // repeated id would let a player miss a question once and then answer the
+  // same question right for the rest of the battle.
+  it("rejects duplicate question ids", () => {
+    expect(isValidSoloBattleCfgRef({ ...validRef(), questionIds: ["a", "b", "a"] })).toBe(false);
+    expect(isValidSoloBattleCfgRef({ ...validRef(), questionIds: ["a", "b", "c"] })).toBe(true);
+  });
+
+  it("caps how many questions one battle may name", () => {
+    const ids = (n: number) => Array.from({ length: n }, (_, i) => `q${i}`);
+    expect(
+      isValidSoloBattleCfgRef({ ...validRef(), questionIds: ids(MAX_QUESTIONS_PER_BATTLE) }),
+    ).toBe(true);
+    expect(
+      isValidSoloBattleCfgRef({ ...validRef(), questionIds: ids(MAX_QUESTIONS_PER_BATTLE + 1) }),
+    ).toBe(false);
+  });
+
+  it("still checks the half it shares with a hydrated cfg", () => {
+    expect(isValidSoloBattleCfgRef({ ...validRef(), level: "5" })).toBe(false);
+    expect(isValidSoloBattleCfgRef({ ...validRef(), mode: "raid" })).toBe(false);
+    expect(isValidSoloBattleCfgRef({ ...validRef(), playerTypes: [] })).toBe(false);
+    expect(isValidSoloBattleCfgRef({ ...validRef(), items: {} })).toBe(false);
+  });
+});
 
 describe("isValidSoloBattleCfg", () => {
   it("accepts a well-formed cfg", () => {

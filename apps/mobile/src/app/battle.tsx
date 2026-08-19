@@ -8,14 +8,15 @@ import { getEliteById } from "@ptb/core/elite-four";
 import { battleReward } from "@ptb/core/rewards";
 import { levelFromTotalXp } from "@ptb/core/game-data";
 import {
-  buildCfg,
+  buildCfgRef,
+  buildSetup,
   DEFAULT_PARTNER_ID,
   pickOpponent,
   startBattle,
   type BattleRuntime,
 } from "../lib/battle-setup";
+import { startServerBattle, submitAction } from "../lib/battle-server";
 import { gradeAnswer, loadQuestions, type QuestionSet } from "../lib/questions";
-import { FALLBACK_QUESTIONS } from "../lib/questions";
 import { useTrainer } from "../lib/store";
 import { playBattleResult, playBgm, setMusicOn, stopBgm } from "../lib/audio";
 import { answerHaptic } from "../lib/haptics";
@@ -73,6 +74,9 @@ export default function Battle() {
   const [busy, setBusy] = useState(false);
   const [reveal, setReveal] = useState<{ choice: number; correctIndex: number } | null>(null);
   const [sides, setSides] = useState<{ partner: PokeEntry; opponent: PokeEntry } | null>(null);
+  // Non-null once the battle is running server-side. That is the ONLY thing
+  // that decides which of the two paths `answer` takes.
+  const [serverBattleId, setServerBattleId] = useState<string | null>(null);
   const askedAt = useRef(Date.now());
 
   const partnerId = useTrainer((s) => s.partnerId);
@@ -87,13 +91,9 @@ export default function Battle() {
 
   useEffect(() => {
     let alive = true;
-    loadQuestions(QUESTION_COUNT).then((qs) => {
+    void (async () => {
+      const qs = await loadQuestions(QUESTION_COUNT);
       if (!alive) return;
-      // The engine needs a question set to size the battle. When the questions
-      // came from the server we do NOT hold their answers, so we hand it the
-      // bundled shapes purely for length — correctness arrives per answer from
-      // `gradeAnswer` and is fed straight into applyAnswer.
-      const shapes = qs.local ?? FALLBACK_QUESTIONS.slice(0, qs.served.length);
       const partner = findPokemon(partnerId ?? DEFAULT_PARTNER_ID) ?? findPokemon(DEFAULT_PARTNER_ID)!;
 
       // A gym or Elite Four challenge fixes the opponent; a plain solo battle
@@ -105,15 +105,44 @@ export default function Battle() {
       const foeId = leader?.signaturePokemonId ?? challenger?.signaturePokemonId;
       const opponent = foeId ? (findPokemon(foeId) ?? pickOpponent(partner)) : pickOpponent(partner);
       const mode = challenger ? "elite" : leader ? "weekly" : "battle";
+      const setup = buildSetup(partner, opponent, 5, mode);
+
+      // Open a server battle when the questions came from the server, because
+      // only then do they have ids the server can resolve. If that call fails
+      // the battle still happens, resolved on the device: a player on a flaky
+      // connection gets to play, and what is lost is authority over a
+      // single-player result — not the result itself.
+      let battleId: string | null = null;
+      if (qs.fromServer) {
+        try {
+          const started = await startServerBattle(
+            buildCfgRef(
+              qs.served.map((q) => q.id),
+              partner,
+              opponent,
+              5,
+              mode,
+            ),
+          );
+          battleId = started.battleId;
+        } catch {
+          battleId = null;
+        }
+      }
+
       if (!alive) return;
       setSides({ partner, opponent });
       // Encountering is seeing. Winning is catching — that is the whole loop.
       markSeen(opponent.id);
       markCaught(partner.id);
       setSet(qs);
-      setRuntime(startBattle(buildCfg(shapes, partner, opponent, 5, mode)));
+      setServerBattleId(battleId);
+      // Only the opening frame. On the server path every state after this one
+      // comes back from the Edge Function; `runtime.rng` and `runtime.seed`
+      // go unused there, since the server owns the real seed.
+      setRuntime(startBattle(setup));
       askedAt.current = Date.now();
-    });
+    })();
     return () => {
       alive = false;
     };
@@ -138,26 +167,54 @@ export default function Battle() {
       setBusy(true);
       const elapsedMs = Date.now() - askedAt.current;
       try {
-        const grade = await gradeAnswer(set, idx, choice);
-        answerHaptic(grade.correct);
-        setReveal({ choice, correctIndex: grade.correctIndex });
+        let next: BattleState;
+        let events: BattleEvent[];
+        let correct: boolean;
+        let correctIndex: number;
 
-        // Round start first (statuses tick, poison bites), then the answer —
-        // the same order solo-battle-replay.ts uses server-side, so an
-        // optimistic preview here and the authoritative replay agree.
-        const rs = applyRoundStart(runtime.state, runtime.config, idx);
-        const res =
-          rs.state.phase === "in_progress"
-            ? applyAnswer(
-                rs.state,
-                runtime.config,
-                { correct: grade.correct, questionIdx: idx, elapsedMs },
-                runtime.rng.fork(String(idx)),
-              )
-            : { state: rs.state, events: [] };
+        if (serverBattleId) {
+          // The authoritative path runs NO local engine code. A second opinion
+          // computed here is exactly the drift battle-solo exists to prevent,
+          // and `reveal` is the only thing the device ever learns about the
+          // answer key — the same thing `grade_trivia_answer` would have told
+          // it, arriving in the round-trip that had to happen anyway.
+          const res = await submitAction(serverBattleId, {
+            type: "submit_answer",
+            questionIdx: idx,
+            choiceIdx: choice,
+            elapsedMs,
+          });
+          next = res.state;
+          events = res.events;
+          correctIndex = res.reveal?.correctIndex ?? -1;
+          correct = correctIndex === choice;
+        } else {
+          const grade = await gradeAnswer(set, idx, choice);
+          correct = grade.correct;
+          correctIndex = grade.correctIndex;
 
-        if (res.state.phase !== "in_progress") {
-          const won = res.state.phase === "won";
+          // Round start first (statuses tick, poison bites), then the answer —
+          // the same order solo-battle-replay.ts uses server-side, so the two
+          // paths cannot disagree about a battle they both could have run.
+          const rs = applyRoundStart(runtime.state, runtime.config, idx);
+          const res =
+            rs.state.phase === "in_progress"
+              ? applyAnswer(
+                  rs.state,
+                  runtime.config,
+                  { correct, questionIdx: idx, elapsedMs },
+                  runtime.rng.fork(String(idx)),
+                )
+              : { state: rs.state, events: [] as BattleEvent[] };
+          next = res.state;
+          events = [...rs.events, ...res.events];
+        }
+
+        answerHaptic(correct);
+        setReveal({ choice, correctIndex });
+
+        if (next.phase !== "in_progress") {
+          const won = next.phase === "won";
           playBattleResult(won);
 
           // The same reward function the web app uses, so a battle here pays
@@ -169,7 +226,7 @@ export default function Battle() {
               mode: elite ? "elite" : gym ? "weekly" : "regular",
               won,
               level: levelFromTotalXp(xp),
-              maxStreak: res.state.maxStreak,
+              maxStreak: next.maxStreak,
             }),
           );
 
@@ -180,10 +237,9 @@ export default function Battle() {
           }
         }
 
-        const events = [...rs.events, ...res.events];
         const lines = events.map(describe).filter((l): l is string => l !== null);
         setLog((prev) => [...lines, ...prev].slice(0, 6));
-        setRuntime({ ...runtime, state: res.state });
+        setRuntime({ ...runtime, state: next });
 
         setTimeout(() => {
           setReveal(null);
@@ -196,7 +252,22 @@ export default function Battle() {
         setBusy(false);
       }
     },
-    [set, runtime, busy, done, idx, sides, markCaught, grantReward, xp, awardBadge, awardElite, gym, elite],
+    [
+      set,
+      runtime,
+      busy,
+      done,
+      idx,
+      sides,
+      serverBattleId,
+      markCaught,
+      grantReward,
+      xp,
+      awardBadge,
+      awardElite,
+      gym,
+      elite,
+    ],
   );
 
   const summary = useMemo(() => {
