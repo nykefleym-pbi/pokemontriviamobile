@@ -55,6 +55,16 @@ const BOSS_DMG = 10;
  *  out answer). */
 const PLAYER_DMG = 8;
 
+/** The shortest question set a raid can be won on by answering alone.
+ *
+ *  DERIVED, not hand-typed: `applyMegaAnswer`'s ran-out-of-questions branch
+ *  only awards a win if `correctCount >= MEGA_BOSS_HP / BOSS_DMG`, so a set
+ *  shorter than this is unwinnable the moment it runs out -- the raid screen's
+ *  own comment says as much. X Attack can still deplete the boss early with
+ *  fewer correct answers; this is the floor for a run that goes the distance,
+ *  and the minimum the server will start a raid with. */
+export const MEGA_MIN_QUESTIONS = MEGA_BOSS_HP / BOSS_DMG;
+
 export type MegaRaidPhase = "in_progress" | "won" | "lost";
 
 export interface MegaRaidState {

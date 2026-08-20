@@ -24,6 +24,7 @@ import { enemyHpForLevel } from "../lib/level-curve";
 import type { AbilityId } from "../lib/abilities";
 import type { Trivia } from "../lib/trivia-core";
 import type { BattleConfig, BattleItemConfig } from "./turn";
+import { isValidQuestionIdList } from "./question-ids";
 
 export type SoloBattleMode = "battle" | "elite" | "weekly";
 
@@ -198,33 +199,16 @@ export function isValidSoloBattleCfg(cfg: unknown): cfg is SoloBattleCfg {
   );
 }
 
-/** The same ceiling `get_trivia_questions` enforces on a single fetch. A cfg
- *  is client-supplied, so without a cap one request could name an unbounded
- *  number of ids and make every replay of that battle proportionally
- *  expensive. */
-export const MAX_QUESTIONS_PER_BATTLE = 50;
-
 /** Validates the cfg a client may submit, and the cfg as stored in
- *  `solo_battles.cfg`.
- *
- *  DUPLICATE IDS ARE REJECTED, and that is a rule about cheating rather than
- *  about shape. Every answer's reveal tells the player the correct option, so
- *  a set of `[X, X, X, X, X, X]` would let them miss the first question and
- *  then answer the same question right five times. The client picks its own
- *  questions (`get_trivia_questions` returns a random set), so the server
- *  cannot vet WHICH questions -- but it can insist they be distinct. Used by battle-solo on both `start` (trusting nothing
+ *  `solo_battles.cfg`. Used by battle-solo on both `start` (trusting nothing
  *  from the wire) and `submit_action` (trusting nothing from the row either,
- *  since a malformed row would otherwise reach the engine). */
+ *  since a malformed row would otherwise reach the engine).
+ *
+ *  The id-list rules -- distinct, capped, non-empty -- live in
+ *  question-ids.ts, shared with Mega raids. See there for why duplicates are
+ *  rejected; it is a cheating rule, not a shape rule. */
 export function isValidSoloBattleCfgRef(cfg: unknown): cfg is SoloBattleCfgRef {
   if (!cfg || typeof cfg !== "object") return false;
   const c = cfg as Record<string, unknown>;
-  if (!Array.isArray(c.questionIds)) return false;
-  const ids = c.questionIds;
-  return (
-    ids.length > 0 &&
-    ids.length <= MAX_QUESTIONS_PER_BATTLE &&
-    ids.every((id) => typeof id === "string" && id.length > 0) &&
-    new Set(ids).size === ids.length &&
-    isValidSetupInput(c)
-  );
+  return isValidQuestionIdList(c.questionIds) && isValidSetupInput(c);
 }

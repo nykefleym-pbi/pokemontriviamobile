@@ -2,27 +2,40 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
-  applyMegaAnswer,
-  applyMegaForfeit,
-  applyMegaPotion,
-  applyMegaXAttack,
   initialMegaRaidState,
   MEGA_BOSS_HP,
+  MEGA_MIN_QUESTIONS,
   MEGA_PLAYER_MAX_HP,
   type MegaHealItemId,
   type MegaRaidState,
 } from "@ptb/core/mega";
-import { gradeAnswer, loadQuestions, type QuestionSet } from "../lib/questions";
+import type { MegaRaidAction } from "@ptb/core/mega-replay";
+import {
+  claimRaidReward,
+  startRaid,
+  submitRaidAction,
+  type MegaReward,
+  type ServedQuestion,
+} from "../lib/mega-server";
 import { answerHaptic } from "../lib/haptics";
 import { playBattleResult, playBgm, stopBgm } from "../lib/audio";
 import { useTrainer } from "../lib/store";
 
-/** The boss has 400 HP and a correct answer removes 10, so a win needs 40
- *  correct answers — the question set has to be at least that deep or the
- *  raid is unwinnable by construction. */
-const QUESTION_COUNT = 40;
+// This screen holds NO raid math. The boss's HP, the player's HP, whether an
+// answer was right and what the run is worth are all decided by the `mega-run`
+// Edge Function; everything below just renders the state it sends back and
+// forwards the player's intent. The one number kept locally is the reveal
+// timer, which is presentation.
+//
+// Items are the exception, and deliberately so: the wallet and the inventory
+// still live on the device (see the store), so the client spends the item and
+// the server is told an item was used. A player who edits their own inventory
+// cheats themselves out of nothing the server pays for -- the reward depends
+// only on correct answers and the win, both of which the server owns.
 
 const HEAL_ITEMS: MegaHealItemId[] = ["potion", "superpotion", "maxpotion"];
+
+const REVEAL_MS = 700;
 
 export default function Mega() {
   const router = useRouter();
@@ -31,18 +44,29 @@ export default function Mega() {
   const grantReward = useTrainer((s) => s.grantReward);
   const musicOn = useTrainer((s) => s.musicOn);
 
-  const [set, setSet] = useState<QuestionSet | null>(null);
+  const [runId, setRunId] = useState<string | null>(null);
+  const [questions, setQuestions] = useState<ServedQuestion[] | null>(null);
   const [state, setState] = useState<MegaRaidState>(initialMegaRaidState);
-  const [idx, setIdx] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [reveal, setReveal] = useState<{ choice: number; correctIndex: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [reveal, setReveal] = useState<{ choice: number | null; correctIndex: number } | null>(
+    null,
+  );
+  const [reward, setReward] = useState<MegaReward | null>(null);
   const paid = useRef(false);
 
   useEffect(() => {
     let alive = true;
-    void loadQuestions(QUESTION_COUNT).then((qs) => {
-      if (alive) setSet(qs);
-    });
+    startRaid().then(
+      (r) => {
+        if (!alive) return;
+        setRunId(r.runId);
+        setQuestions(r.questions);
+      },
+      (e: Error) => {
+        if (alive) setError(e.message);
+      },
+    );
     return () => {
       alive = false;
     };
@@ -55,38 +79,79 @@ export default function Mega() {
 
   const done = state.phase !== "in_progress";
 
-  // Pay out exactly once, however the raid ended.
+  // Collect exactly once, however the raid ended. `claim_reward` is the
+  // server's claim-once guard, so this is safe even if the effect re-runs; the
+  // local wallet is only credited on the call that actually won the race.
   useEffect(() => {
-    if (!done || paid.current) return;
+    if (!done || !runId || paid.current) return;
     paid.current = true;
     playBattleResult(state.phase === "won");
-    grantReward(
-      state.phase === "won" ? { xp: 500, coins: 750 } : { xp: state.correctCount * 5 },
+    claimRaidReward(runId).then(
+      (r) => {
+        setReward(r.reward);
+        grantReward({ xp: r.reward.xp, coins: r.reward.coins });
+      },
+      () => {
+        /* already claimed, or offline — the run keeps the reward server-side */
+      },
     );
-  }, [done, state.phase, state.correctCount, grantReward]);
+  }, [done, runId, state.phase, grantReward]);
 
-  const answer = useCallback(
-    async (choice: number) => {
-      if (!set || busy || done) return;
+  /** Every player intent goes through here, so the server is the only thing
+   *  that ever advances `state`. */
+  const send = useCallback(
+    async (action: MegaRaidAction) => {
+      if (!runId || busy || done) return;
       setBusy(true);
       try {
-        const grade = await gradeAnswer(set, idx % set.served.length, choice);
-        answerHaptic(grade.correct);
-        setReveal({ choice, correctIndex: grade.correctIndex });
-        setState((s) => applyMegaAnswer(s, QUESTION_COUNT, { correct: grade.correct }));
-        setTimeout(() => {
-          setReveal(null);
-          setIdx((i) => i + 1);
-          setBusy(false);
-        }, 700);
-      } catch {
+        const res = await submitRaidAction(runId, action);
+        if (action.type === "answer" && res.reveal) {
+          answerHaptic(res.reveal.correctIndex === action.choiceIdx);
+          setReveal({ choice: action.choiceIdx, correctIndex: res.reveal.correctIndex });
+          setTimeout(() => {
+            setReveal(null);
+            setState(res.state);
+            setBusy(false);
+          }, REVEAL_MS);
+          return;
+        }
+        setState(res.state);
+        setBusy(false);
+      } catch (e) {
+        setError((e as Error).message);
         setBusy(false);
       }
     },
-    [set, busy, done, idx],
+    [runId, busy, done],
   );
 
-  if (!set) {
+  /** Spend the item first: if the device has none, the server is never told
+   *  one was used, so the two never disagree in the player's favour. */
+  const useItem = useCallback(
+    (id: MegaHealItemId | "xattack") => {
+      if (!consumeItem(id)) return;
+      void send(id === "xattack" ? { type: "use_xattack" } : { type: "use_potion", itemId: id });
+    },
+    [consumeItem, send],
+  );
+
+  if (error && !questions) {
+    return (
+      <View className="flex-1 items-center justify-center gap-4 bg-background p-6">
+        <Text className="text-center text-sm text-muted-foreground">
+          The raid could not be started. {error}
+        </Text>
+        <Pressable
+          className="rounded-card bg-primary px-5 py-3 active:opacity-80"
+          onPress={() => router.replace("/")}
+        >
+          <Text className="font-bold text-primary-foreground">Back home</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (!questions) {
     return (
       <View className="flex-1 items-center justify-center bg-background">
         <ActivityIndicator color="#ee343b" />
@@ -94,7 +159,9 @@ export default function Mega() {
     );
   }
 
-  const question = set.served[idx % set.served.length];
+  // The server hands back one question per index and refuses any answer out of
+  // sequence, so the index IS the number already answered — no local cursor.
+  const question = questions[state.questionsAnswered];
 
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-4 p-5">
@@ -102,9 +169,11 @@ export default function Mega() {
       <Bar label="You" hp={state.playerHp} max={MEGA_PLAYER_MAX_HP} tone="bg-poke-blue" />
 
       <View className="flex-row justify-between rounded-card bg-card p-3">
-        <Text className="text-xs text-muted-foreground">Correct {state.correctCount}/40</Text>
         <Text className="text-xs text-muted-foreground">
-          Q {state.questionsAnswered}/{QUESTION_COUNT}
+          Correct {state.correctCount}/{MEGA_MIN_QUESTIONS}
+        </Text>
+        <Text className="text-xs text-muted-foreground">
+          Q {state.questionsAnswered}/{questions.length}
         </Text>
         {state.xAttackArmed && <Text className="text-xs font-bold text-primary">X Attack</Text>}
       </View>
@@ -117,6 +186,11 @@ export default function Mega() {
           <Text className="text-center text-sm text-muted-foreground">
             {state.correctCount} correct · boss on {state.bossHp} HP
           </Text>
+          {reward && (
+            <Text className="text-center text-sm font-bold text-poke-dark">
+              +{reward.xp} XP{reward.coins > 0 ? ` · +${reward.coins} coins` : ""}
+            </Text>
+          )}
           <Pressable
             className="rounded-card bg-primary px-5 py-3 active:opacity-80"
             onPress={() => router.replace("/")}
@@ -124,7 +198,7 @@ export default function Mega() {
             <Text className="text-center font-bold text-primary-foreground">Back home</Text>
           </Pressable>
         </View>
-      ) : (
+      ) : question ? (
         <>
           <Text className="text-lg font-bold text-poke-dark">{question.question}</Text>
           {question.options.map((opt, i) => {
@@ -134,7 +208,7 @@ export default function Mega() {
               <Pressable
                 key={i}
                 disabled={busy}
-                onPress={() => void answer(i)}
+                onPress={() => void send({ type: "answer", questionIdx: state.questionsAnswered, choiceIdx: i })}
                 className={`rounded-card border border-border px-4 py-3 active:opacity-80 ${
                   isRight ? "bg-poke-blue" : isPicked ? "bg-primary" : "bg-card"
                 }`}
@@ -158,10 +232,8 @@ export default function Mega() {
               return (
                 <Pressable
                   key={id}
-                  disabled={held < 1}
-                  onPress={() => {
-                    if (consumeItem(id)) setState((s) => applyMegaPotion(s, id));
-                  }}
+                  disabled={held < 1 || busy}
+                  onPress={() => useItem(id)}
                   className={`rounded-card px-3 py-2 ${
                     held > 0 ? "border border-border bg-card" : "bg-muted"
                   }`}
@@ -175,10 +247,8 @@ export default function Mega() {
               );
             })}
             <Pressable
-              disabled={(inventory.xattack ?? 0) < 1 || state.xAttackArmed}
-              onPress={() => {
-                if (consumeItem("xattack")) setState(applyMegaXAttack);
-              }}
+              disabled={(inventory.xattack ?? 0) < 1 || state.xAttackArmed || busy}
+              onPress={() => useItem("xattack")}
               className={`rounded-card px-3 py-2 ${
                 (inventory.xattack ?? 0) > 0 && !state.xAttackArmed
                   ? "border border-border bg-card"
@@ -196,14 +266,15 @@ export default function Mega() {
               </Text>
             </Pressable>
             <Pressable
-              onPress={() => setState(applyMegaForfeit)}
+              disabled={busy}
+              onPress={() => void send({ type: "forfeit" })}
               className="rounded-card border border-border px-3 py-2"
             >
               <Text className="text-xs font-bold text-muted-foreground">Forfeit</Text>
             </Pressable>
           </View>
         </>
-      )}
+      ) : null}
     </ScrollView>
   );
 }

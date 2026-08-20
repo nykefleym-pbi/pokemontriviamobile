@@ -504,17 +504,57 @@ import dragged a non-isomorphic module into the Edge Function bundle and broke
 its esbuild step. **Keep the duplicates in sync; do not "fix" them into an
 import.**
 
-## Server authority: the gap solo and Mega share
+## Server authority: solo and Mega, and the difference between them
 
-Neither solo battles nor Mega raids are server-authoritative yet. Both resolve
-in the client and write nothing the server checks. The ROADMAP's Phase 2 design
-is that a Deno Edge Function importing `packages/core` resolves turns and SQL
-only persists — that function does not exist.
+Both modes are server-authoritative now — `battle-solo` and `mega-run`, each a
+Deno Edge Function importing `packages/core`, each the only thing that advances
+its own state. The screens render what comes back and nothing else.
 
-What that means concretely: `solo_battles` is never written, and a player could
-report any result. The engine is already replay-shaped for it (`replayBattle`,
-`applyNextAction`, `replayMegaLog` all take `(seed, log)`), so the work is the
-Edge Function and its wiring, not a redesign.
+They do **not** trust the client equally, and the difference is the thing to
+carry forward.
+
+`battle-solo` lets the client name its own question ids. `mega-run` does not:
+`start` takes no question argument at all, the server calls
+`pick_mega_questions`, and the response carries `{question, options, category}`
+per question — no id, no `correct_index`, no `explanation`. Migration 0013's
+reasoning is why: a client that can ask for six `easy` questions is choosing its
+own difficulty, and no amount of validating the SHAPE of an id list catches
+that. `isValidQuestionIdList`'s duplicate rule stops a different cheat (replaying
+one question whose answer a reveal already gave away) and should not be mistaken
+for difficulty protection.
+
+**So solo still has a live difficulty-shopping gap**, inherited from the
+id-based contract it merged with. Closing it means moving solo to Mega's shape:
+the server picks, the client is told. That is a client-contract change, not a
+patch.
+
+A related, smaller one: `battle-solo`'s `start`/`get` return `seed`, which
+migration 0011 deliberately withholds from the owner. Migration 0012 measured
+that the seed currently has no observable effect (`abilityId` is pinned null),
+so this is lost defence-in-depth rather than a live exploit — but it is lost.
+
+### What `mega-run` does with a run
+
+Correctness is resolved **once**, at submit time, by `grade_trivia_answer`, and
+baked into the stored action as `correct`. The log is therefore replayable
+forever without re-consulting the question bank, and `StoredMegaRaidAction`
+(with `correct`) is a genuinely different type from `MegaRaidAction` (without).
+A client that could send `correct` would be grading itself; that is why the
+transport takes the latter.
+
+The function runs as the service role, so RLS is bypassed and **every query
+carries its own `user_id` filter**. `mega_runs` has an owner-select policy and
+no write policy at all — the client can read its row and nothing else can write
+it.
+
+`claim_reward` is one guarded UPDATE (`status <> 'active' AND reward_claimed_at
+IS NULL`), which is what makes paying out exactly once safe under a race rather
+than merely unlikely. Two genuinely concurrent claims were fired at the deployed
+function: one got the reward, the other got `already_claimed`.
+
+The wallet is still the client's. A player who edits their own inventory cheats
+themselves out of nothing the server pays for — the reward is a function of
+correct answers and the win, both of which the server owns.
 
 ## Gyms and the Elite Four
 
@@ -637,13 +677,13 @@ build to confirm.
 
 ## Edge Functions: the build, deploy and verify loop
 
-`supabase/functions/battle-solo/index.ts` is NOT what gets deployed. Deno cannot
+`supabase/functions/<name>/index.ts` is NOT what gets deployed. Deno cannot
 resolve its relative imports into `packages/core` without the whole repo on the
 deploy target, and Supabase's deploy API takes a flat file list rather than a
-directory. The loop is:
+directory. The loop, for `battle-solo` and `mega-run` alike, is:
 
 ```
-npm run bundle:edge -- battle-solo     # esbuild -> .bundle.ts (gitignored)
+npm run bundle:edge -- mega-run        # esbuild -> .bundle.ts (gitignored)
 # deploy the BUNDLE, never index.ts
 ```
 
@@ -680,17 +720,55 @@ instead, which also makes the test a real one rather than a hash comparison:
 1. `create extension if not exists pg_net;`
 2. `POST /auth/v1/signup` with `{"data":{}}` and the anon key — anonymous
    sign-in is on, so this returns a genuine user JWT.
-3. `POST /functions/v1/battle-solo` with that JWT, reading responses back out of
+3. `POST /functions/v1/<name>` with that JWT, reading responses back out of
    `net._http_response`.
 
 Worth exercising, because each has caught or could catch something real: the
-happy path, cross-user isolation (a second anonymous user must get 404 on both
-`get` AND `submit_action` — service role bypasses RLS, so only the explicit
-`user_id` filter protects the row), out-of-sequence and post-end actions (409),
-duplicate and unknown question ids (400), and that the stored `cfg` contains no
-answer key.
+happy path, cross-user isolation (a second anonymous user must get 404 on
+`get`, `submit_action` AND `claim_reward` — service role bypasses RLS, so only
+the explicit `user_id` filter protects the row), out-of-sequence and post-end
+actions (409), malformed and unknown ids (400/404), a timed-out answer
+(`choiceIdx: null` — graded wrong, still revealed), two concurrent claims of
+which exactly one may pay, and that neither the stored row nor the served
+questions contain an answer key.
 
 **Put the database back afterwards.** Drop the probe functions and tables, delete
 the anonymous users, reset any `curated_questions` counters the probe moved
 (`grade_trivia_answer` bumps `times_served`/`times_correct`), and drop `pg_net` —
-it is not in any migration, so leaving it installed is schema drift.
+it is not in any migration, so leaving it installed is schema drift. Reverse the
+counters from the runs' own logs before deleting the rows, not from a tally kept
+by hand; the logs are the record of exactly which questions were graded.
+
+Two things about pg_net that cost time:
+
+- **The default timeout is 5000 ms**, and an answer that grades and updates can
+  exceed it under load. The request still executes — the timeout is the
+  client's, not the server's — so a null response does not mean nothing
+  happened. Check the row before retrying, and pass
+  `timeout_milliseconds := 25000`.
+- **Requests issued in one transaction all fire concurrently.** Anything
+  order-dependent cannot be batched: issuing 40 sequential answers at once lands
+  exactly one and the other 39 come back `unexpected_question_idx`.
+
+### Driving a long sequential run
+
+Verifying Mega's win branch needs 40 answers in order, which is 40 round trips
+from here. `pg_net` posts only fire at commit, so an in-transaction poll never
+sees its own response, and `dblink` cannot open an autonomous transaction
+(non-superuser: *password or GSSAPI delegated credentials required*).
+
+`pg_cron` can, and it is already installed. Schedule a one-second job whose
+function reads the current log length, posts the answer for exactly that index,
+and returns early if the previous attempt is still in flight (a `_probe` row
+with no `net._http_response` yet):
+
+```sql
+select cron.schedule('_probe_drive', '1 seconds', 'select public._probe_step()');
+-- ~40 seconds later
+select cron.unschedule('_probe_drive');
+```
+
+Each firing is its own transaction, so each post actually goes out. **Unschedule
+it in the same statement you read the result**, and confirm `cron.job` is back
+to the one job the migrations create. This is how the 40-correct clear was
+verified against the deployed function rather than argued from the unit tests.

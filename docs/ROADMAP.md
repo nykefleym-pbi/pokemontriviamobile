@@ -337,9 +337,7 @@ Gate: a debug APK installs and a full solo battle completes on a real device.
 >
 > The question bank is seeded, so this phase is no longer blocked on content —
 > `get_trivia_questions` and `get_daily_questions` both return real questions
-> today. The remaining blocker for anything touching a player identity is that
-> **anonymous sign-ins are still disabled** in the Supabase dashboard; the battle
-> screen itself needs no session, so it can be built and played before that.
+> today.
 
 > Note: the Zustand store itself is **not** in `packages/core` (see *Phase 1
 > boundary*) and does not need to be — it is app state, so it belongs in
@@ -432,13 +430,17 @@ In dependency order, each ending in a new internal-testing build:
    and the 7-day daily gift with its miss-forgiveness and welcome-back purse.
    **Not built:** consuming items in battle (there is no bag UI), and
    **achievements** — see below for why those are not a port.
-5. **Mega raids** — 🟡 **client done**: the engine (`mega-replay.ts`,
-   `mega-battle-replay.ts`) is ported with its test, and the raid screen plays
-   — 400 HP boss, 40 correct answers to clear, potions and X Attack consumed
-   from the inventory. **Not done:** the `mega_*` tables and the
-   `mega-run` / `mega-reward-claim` Edge Functions, i.e. it is not
-   server-authoritative. That is the same gap solo battles have; see
-   *Server authority* in the handover.
+5. **Mega raids** — ✅ **done, server-authoritative**: the engine
+   (`mega-replay.ts`, `mega-battle-replay.ts`) is ported with its test, the
+   `mega_runs` table and the `pick_mega_questions` picker are applied
+   (migrations 0014/0015), and the `mega-run` Edge Function owns the whole
+   run — it picks the questions, grades every answer, replays its own log and
+   decides the reward. The raid screen holds no raid math at all.
+   The reward-claim half needed no second function: `mega-run`'s
+   `claim_reward` op is a single guarded UPDATE, which is what makes it
+   claim-once. Verified end to end against the deployed function, including a
+   real 40-correct clear and two genuinely concurrent claims of which exactly
+   one paid.
 6. **PvP** — the largest slice by far: live matches, queue, chat, moderation,
    signature abilities, weather, the bot. Re-architected per Phase 2 so turn
    resolution lives only in `packages/core`.

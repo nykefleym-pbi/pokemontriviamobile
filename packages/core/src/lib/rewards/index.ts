@@ -130,3 +130,29 @@ export const WHOS_THAT_XP = 100;
 
 // NOTE: Mega Raid rewards live in src/lib/mega/schedule.ts (MEGA_REWARD + megaRankScale),
 // kept in the mega domain. See docs/ARCHITECTURE.md.
+
+export interface MegaReward {
+  xp: number;
+  coins: number;
+  tp: number;
+}
+
+/**
+ * Reward for a Mega raid, by outcome. Mirrors the values the raid screen
+ * granted inline before the run became server-authoritative: a clear pays a
+ * flat purse, and a failed raid still pays a little XP per correct answer so
+ * a long unsuccessful run is not worth nothing.
+ *
+ * Unlike `battleReward` this does NOT scale with level, which is deliberate
+ * rather than an omission -- the raid boss does not scale either (a flat 400
+ * HP needing 40 correct answers), so the effort is the same at every level and
+ * so is the pay.
+ *
+ * Lives here, in packages/core, because the mega-run Edge Function computes it
+ * when the run ends and the client displays it. Two copies of a payout table
+ * is how a client and a server come to disagree about what a player earned.
+ */
+export function megaReward(opts: { won: boolean; correctCount: number }): MegaReward {
+  if (opts.won) return { xp: 500, coins: 750, tp: 0 };
+  return { xp: opts.correctCount * 5, coins: 0, tp: 0 };
+}
