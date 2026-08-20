@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
-import {
-  isValidSoloBattleCfg,
-  isValidSoloBattleCfgRef,
-  MAX_QUESTIONS_PER_BATTLE,
-} from "./solo-battle-config";
+import { isValidSoloBattleCfg, isValidSoloBattleCfgRef } from "./solo-battle-config";
+import { isValidQuestionIdList, MAX_QUESTIONS_PER_BATTLE } from "./question-ids";
 import { isValidBattleAction } from "./turn";
+import { applyMegaAnswer, initialMegaRaidState, MEGA_MIN_QUESTIONS } from "./mega-replay";
+import { megaReward } from "../lib/rewards";
 import type { SoloBattleCfg, SoloBattleCfgRef } from "./solo-battle-config";
 
 const VALID_ITEMS = {
@@ -168,5 +167,68 @@ describe("isValidBattleAction", () => {
   it("rejects non-objects", () => {
     expect(isValidBattleAction(null)).toBe(false);
     expect(isValidBattleAction("forfeit")).toBe(false);
+  });
+});
+
+describe("isValidQuestionIdList", () => {
+  const ids = (n: number) => Array.from({ length: n }, (_, i) => `q${i}`);
+
+  it("accepts a distinct, non-empty list", () => {
+    expect(isValidQuestionIdList(["a", "b", "c"])).toBe(true);
+  });
+
+  it("rejects non-arrays, empties, and non-string or empty ids", () => {
+    expect(isValidQuestionIdList("abc")).toBe(false);
+    expect(isValidQuestionIdList(null)).toBe(false);
+    expect(isValidQuestionIdList([])).toBe(false);
+    expect(isValidQuestionIdList([1, 2])).toBe(false);
+    expect(isValidQuestionIdList([""])).toBe(false);
+  });
+
+  // The cheating rule, stated once and tested once. See question-ids.ts.
+  it("rejects duplicates", () => {
+    expect(isValidQuestionIdList(["a", "b", "a"])).toBe(false);
+  });
+
+  it("caps the list", () => {
+    expect(isValidQuestionIdList(ids(MAX_QUESTIONS_PER_BATTLE))).toBe(true);
+    expect(isValidQuestionIdList(ids(MAX_QUESTIONS_PER_BATTLE + 1))).toBe(false);
+  });
+
+  it("honours a caller-supplied minimum, which is how Mega demands a winnable set", () => {
+    expect(isValidQuestionIdList(ids(39), MEGA_MIN_QUESTIONS)).toBe(false);
+    expect(isValidQuestionIdList(ids(40), MEGA_MIN_QUESTIONS)).toBe(true);
+  });
+});
+
+describe("MEGA_MIN_QUESTIONS", () => {
+  // Derived, so this pins the derivation rather than restating the number:
+  // a set of exactly this length that is answered perfectly must WIN, and one
+  // question shorter must LOSE on the ran-out-of-questions branch.
+  it("is exactly the length a perfect run needs to win", () => {
+    const play = (total: number) => {
+      let s = initialMegaRaidState();
+      for (let i = 0; i < total; i++) s = applyMegaAnswer(s, total, { correct: true });
+      return s.phase;
+    };
+    expect(play(MEGA_MIN_QUESTIONS)).toBe("won");
+    expect(play(MEGA_MIN_QUESTIONS - 1)).toBe("lost");
+  });
+});
+
+describe("megaReward", () => {
+  it("pays a flat purse for a clear", () => {
+    expect(megaReward({ won: true, correctCount: 40 })).toEqual({ xp: 500, coins: 750, tp: 0 });
+  });
+
+  it("pays a losing run per correct answer, and nothing for none", () => {
+    expect(megaReward({ won: false, correctCount: 12 })).toEqual({ xp: 60, coins: 0, tp: 0 });
+    expect(megaReward({ won: false, correctCount: 0 })).toEqual({ xp: 0, coins: 0, tp: 0 });
+  });
+
+  it("does not scale a clear with how it was cleared", () => {
+    expect(megaReward({ won: true, correctCount: 40 })).toEqual(
+      megaReward({ won: true, correctCount: 20 }),
+    );
   });
 });
