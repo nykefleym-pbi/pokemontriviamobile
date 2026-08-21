@@ -73,10 +73,11 @@ Supabase directly and needs no Nitro server at all.
 
 1. ~~**Create the empty GitHub repo** and add it to this session's scope.~~
    **Done** — `nykefleym-pbi/pokemontriviamobile`, in scope, Phase 1 merged to `main`.
-2. **Google Play developer account** ($25 one-off). Note: personal accounts must run
-   12+ testers on closed testing for 14 continuous days before production unlocks —
-   irrelevant for internal testing, which is our Phase 3 target, but it sets the
-   runway for any later public launch. **Still outstanding.**
+2. ~~**Google Play developer account** ($25 one-off).~~ **Done** — owner
+   confirmed 2026-08-20. Note: personal accounts must run 12+ testers on closed
+   testing for 14 continuous days before production unlocks — irrelevant for
+   internal testing, which is our Phase 3 target, but it sets the runway for any
+   later public launch.
 3. ~~**New Supabase project** created.~~ **Done** — `dpmnugfbawebozwihmer`
    ("Pokemon Trivia Battle Mobile", `ap-northeast-1`).
 4. **Upload keystore** — I generate it, the owner stores the `.jks` and its passwords

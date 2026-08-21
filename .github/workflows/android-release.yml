@@ -36,11 +36,14 @@ jobs:
 
       - run: npm ci
 
-      # Same four gates as ci.yml. A tag must not be able to ship something that
-      # would have failed a pull request.
+      # The same four gates as ci.yml -- all four. A tag must not be able to
+      # ship something that would have failed a pull request. The Metro bundle
+      # is the one that catches monorepo resolution breakage; gradle would hit
+      # it too, but twenty minutes later and inside a gradle stack trace.
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      - run: npm run bundle --workspace @ptb/mobile
 
       - name: Resolve version
         id: v
@@ -51,7 +54,20 @@ jobs:
       # `prebuild` generates the native android/ project, which is gitignored —
       # it is a build product, and keeping it out of the repo means the Expo
       # config stays the single source of truth for native settings.
+      # `working-directory` is load-bearing, and its absence did NOT fail loudly
+      # — which is why it survived review. The Expo project is apps/mobile; the
+      # repo root has no app config, so prebuild there SUCCEEDS against Expo's
+      # defaults and writes ./android with `applicationId
+      # com.anonymous.pokemontriviamobile`, versionCode 1 and versionName
+      # "1.0.0" — wrong package, and the CI version plumbing ignored entirely.
+      # The gradle step below then fails only because apps/mobile/android does
+      # not exist. Repointing gradle at the root android/ would "fix" that and
+      # ship the wrong applicationId to Play, which binds it permanently on
+      # first upload. Verified by running both: from apps/mobile,
+      # ANDROID_VERSION_CODE=42 APP_VERSION=1.2.3 yields versionCode 42 /
+      # versionName 1.2.3 and the real package name.
       - name: Prebuild (generate android/)
+        working-directory: apps/mobile
         env:
           ANDROID_VERSION_CODE: ${{ github.run_number }}
           APP_VERSION: ${{ steps.v.outputs.name }}
@@ -70,17 +86,24 @@ jobs:
           fi
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
 
+      # The signing secrets arrive through `env`, not `${{ }}` interpolated
+      # into the command. Interpolation pastes the literal password into the
+      # shell, so a password containing a quote, a `$` or a backtick would
+      # either break the command or be re-interpreted by it.
       - name: Build signed AAB
         working-directory: apps/mobile/android
         env:
           ANDROID_VERSION_CODE: ${{ github.run_number }}
           APP_VERSION: ${{ steps.v.outputs.name }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           ./gradlew bundleRelease \
             -Pandroid.injected.signing.store.file="$RUNNER_TEMP/upload.jks" \
-            -Pandroid.injected.signing.store.password="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
-            -Pandroid.injected.signing.key.alias="${{ secrets.ANDROID_KEY_ALIAS }}" \
-            -Pandroid.injected.signing.key.password="${{ secrets.ANDROID_KEY_PASSWORD }}"
+            -Pandroid.injected.signing.store.password="$STORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
 
       - name: Remove keystore
         if: always()

@@ -80,6 +80,41 @@ later decision, not a gap.
 
 ## Verification
 
-The workflow has **never been run** — it needs the secrets above, and its
-gradle build cannot be exercised in the development sandbox (no Android SDK).
+The workflow has **never been run end to end** — it needs the secrets above,
+and gradle cannot be exercised in the development sandbox (no Android SDK).
 Treat the first tag push as the real test, and expect to iterate on it.
+
+What HAS been verified locally, by running it:
+
+- `npx expo prebuild --platform android --no-install` **from `apps/mobile`**,
+  with `ANDROID_VERSION_CODE=42 APP_VERSION=1.2.3`, writes
+  `apps/mobile/android/app/build.gradle` with `versionCode 42` and
+  `versionName "1.2.3"`. The CI version plumbing works.
+- The same command **from the repo root does not fail** — it succeeds against
+  Expo's defaults, which is what made this dangerous. It writes a root
+  `./android` with `applicationId com.anonymous.pokemontriviamobile`,
+  `versionCode 1`, `versionName "1.0.0"`, plus a root `app.json` pinning that
+  wrong package and expo dependencies added to the root `package.json`. The
+  workflow originally had no `working-directory` on that step.
+
+If you ever run `prebuild` locally to debug a build: it edits tracked files.
+From `apps/mobile` it rewrites the `android`/`ios` scripts in
+`apps/mobile/package.json`; from the root it also writes `app.json` and edits
+the root `package.json`. Check `git status` and revert before committing.
+
+## If the first build fails
+
+Expect it to, once or twice. Read the failing step before changing anything:
+
+- **A gate fails** (typecheck/lint/test/bundle) — the tag was cut from a commit
+  that would not have passed a PR. Fix on a branch, merge, re-tag.
+- **`prebuild` fails** — an Expo config or plugin problem, reproducible locally
+  with the exact command above. No Android SDK needed.
+- **`gradlew bundleRelease` fails** — the first genuinely new surface. Usually
+  the target API level or an AGP/JDK mismatch. Not reproducible in the sandbox.
+- **Signing fails** — check the four secrets, and that `ANDROID_KEY_ALIAS`
+  matches the alias in the keystore (`upload` by default). `keytool -list -v
+  -keystore upload.jks` shows it.
+
+Use `workflow_dispatch` to re-run without moving the tag; `versionCode` comes
+from the run number, so every attempt still gets a unique one.
